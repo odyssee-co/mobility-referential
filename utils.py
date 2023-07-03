@@ -15,7 +15,7 @@ class OSMToPBFHandler(osmium.SimpleHandler):
     def relation(self, r):
         self.writer.add_relation(r)
 
-def xml_to_pbf(graph_input, graph_output):
+def osm_to_pbf(graph_input, graph_output):
     writer = osmium.SimpleWriter(graph_output)
     handler = OSMToPBFHandler(writer)
     handler.apply_file(graph_input)
