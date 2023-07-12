@@ -5,13 +5,10 @@ class OSMToPBFHandler(osmium.SimpleHandler):
     def __init__(self, writer):
         super(OSMToPBFHandler, self).__init__()
         self.writer = writer
-
     def node(self, n):
         self.writer.add_node(n)
-
     def way(self, w):
         self.writer.add_way(w)
-
     def relation(self, r):
         self.writer.add_relation(r)
 
