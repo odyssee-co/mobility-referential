@@ -14,7 +14,10 @@ import matplotlib.pyplot as plt
 from shapely.ops import nearest_points
 import osmnx as ox
 import pandas as pd
+from network import get_matrices
 
+"""
+#parameters to set all_oneway to true but it's buggy
 utn = ox.settings.useful_tags_node
 oxna = ox.settings.osm_xml_node_attrs
 oxnt = ox.settings.osm_xml_node_tags
@@ -26,6 +29,7 @@ utw = list(set(utw + oxwa + oxwt))
 ox.settings.all_oneway = True
 ox.settings.useful_tags_node = utn
 ox.settings.useful_tags_way = utw
+"""
 
 def get_gdf():
     #Process the zone from the given input departments
@@ -105,9 +109,9 @@ def get_network(gdf):
         print("Downloading road network")
         area = gdf.dissolve().to_crs(4326)
         #cf = '["highway"~"motorway|trunk|primary|secondary"]'
-        graph = ox.graph_from_polygon(area.geometry[0], network_type="all",
-                                      retain_all=False, truncate_by_edge=True,
-                                      clean_periphery=False)
+        graph = ox.graph_from_polygon(area.geometry[0], network_type="all")
+        graph = ox.add_edge_speeds(graph)
+        graph = ox.add_edge_travel_times(graph)
         #graph = ox.projection.project_graph(graph, to_crs=2154)
         ox.save_graphml(graph, filepath=path_graphml)
     if not os.path.exists(path_osm):
@@ -168,6 +172,7 @@ if __name__ == "__main__":
         print("Computing public transports travel times matrix")
         travel_time_matrix_computer = TravelTimeMatrixComputer(
             transport_network,
+            departure=datetime.datetime(2023,7,1,8,30),
             origins=grid,
             transport_modes=[TransportMode.TRANSIT])
         pt_tt = travel_time_matrix_computer.compute_travel_times()
@@ -201,5 +206,5 @@ if __name__ == "__main__":
     else:
         print("Loading bike travel times matrix")
         bike_tt = pd.read_feather(bike_tt_path)
-
+#car_tt2, car_distances = get_matrices(graph, grid)
 from IPython import embed; embed()
