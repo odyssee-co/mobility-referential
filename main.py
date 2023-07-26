@@ -153,26 +153,23 @@ if __name__ == "__main__":
     bbox = gdf.dissolve().to_crs(4326).geometry[0]
 
     h5 = gtfs_path.split("/")[-1]+".h5"
-    if os.path.exists(f"{processed_path}/{h5}"):
-        ua.gtfs.network.load_processed_gtfs_data(h5, dir=processed_path)
-    else:
-        loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path, validation=False,
-                                                            verbose=True, bbox=bbox,
-                                                            remove_stops_outsidebbox=True,
-                                                            append_definitions=True)
-        ua.gtfs.network.create_transit_net(gtfsfeeds_dfs=loaded_feeds,
-                                           day='monday',
-                                           timerange=['07:00:00', '10:00:00'],
-                                           calendar_dates_lookup=None)
-        ua.gtfs.headways.headways(gtfsfeeds_df=loaded_feeds,headway_timerange=['07:00:00','10:00:00'])
-        ua.gtfs.network.save_processed_gtfs_data(loaded_feeds, h5, dir=processed_path)
+    loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path, validation=False,
+                                                        verbose=True, bbox=bbox,
+                                                        remove_stops_outsidebbox=True,
+                                                        append_definitions=True)
+    ua.gtfs.network.create_transit_net(gtfsfeeds_dfs=loaded_feeds,
+                                       day='monday',
+                                       timerange=['07:00:00', '10:00:00'],
+                                       calendar_dates_lookup=None)
+    ua.gtfs.headways.headways(gtfsfeeds_df=loaded_feeds,headway_timerange=['07:00:00','10:00:00'])
 
     edges["distance"] = edges.to_crs(2154).length
     ua.osm.network.create_osm_net(osm_edges=edges, osm_nodes=nodes, travel_speed_mph=3)
 
     urbanaccess_net = ua.network.ua_network
+
+    from IPython import embed; embed()
     ua.network.integrate_network(urbanaccess_network=urbanaccess_net,
                              headways=True,
                              urbanaccess_gtfsfeeds_df=loaded_feeds,
                              headway_statistic='mean')
-    from IPython import embed; embed()
