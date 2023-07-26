@@ -151,7 +151,6 @@ if __name__ == "__main__":
 
     nodes, edges = ox.graph_to_gdfs(graph)
     bbox = gdf.dissolve().to_crs(4326).geometry[0]
-    gtfs_path =  "/home/matt/git/mobility-referential/data/IDFM-gtfs"
 
     h5 = gtfs_path.split("/")[-1]+".h5"
     if os.path.exists(f"{processed_path}/{h5}"):
