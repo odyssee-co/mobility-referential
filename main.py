@@ -4,17 +4,18 @@ os.environ['USE_PYGEOS'] = '0'
 import geopandas as gpd
 import sys
 import yaml
-import utils
 import datetime
 import numpy as np
 from itertools import product
 from shapely.geometry import Point
-from r5py import TransportNetwork, TravelTimeMatrixComputer, TransportMode
 import matplotlib.pyplot as plt
 from shapely.ops import nearest_points
 import osmnx as ox
 import pandas as pd
 from network import get_matrices
+import pandana as pdna
+import urbanaccess as ua
+
 
 """
 #parameters to set all_oneway to true but it's buggy
@@ -114,8 +115,6 @@ def get_network(gdf):
         graph = ox.add_edge_travel_times(graph)
         #graph = ox.projection.project_graph(graph, to_crs=2154)
         ox.save_graphml(graph, filepath=path_graphml)
-    if not os.path.exists(path_osm):
-        ox.save_graph_xml(graph, filepath=path_osm)
     return graph
 
 
@@ -128,7 +127,7 @@ if __name__ == "__main__":
         cfg = yaml.safe_load(yml_file)
     data_path = cfg["data_path"]
     municipalities_file = cfg["municipalities_file"]
-    gtfs_file = cfg["gtfs_file"]
+    gtfs_path = cfg["gtfs_path"]
     grid_size = cfg["grid_size"]
 
     #Create the processed data directory
@@ -148,63 +147,33 @@ if __name__ == "__main__":
 
     #plot_grid(gdf, grid, graph)
 
-    nodes, roads = ox.graph_to_gdfs(graph)
-    if not os.path.exists(path_pbf):
-        utils.osm_to_pbf(path_osm, path_pbf)
+    #car_tt2, car_distances = get_matrices(graph, grid)
 
-    transport_network = TransportNetwork(path_pbf, [gtfs_file])
+    nodes, edges = ox.graph_to_gdfs(graph)
+    bbox = gdf.dissolve().to_crs(4326).geometry[0]
+    gtfs_path =  "/home/matt/git/mobility-referential/data/IDFM-gtfs"
 
-    car_tt_path = f"{processed_path}/car_tt.feather"
-    if not os.path.exists(car_tt_path):
-        print("Computing car travel times matrix")
-        travel_time_matrix_computer = TravelTimeMatrixComputer(
-            transport_network,
-            origins=grid,
-            transport_modes=[TransportMode.CAR])
-        car_tt = travel_time_matrix_computer.compute_travel_times()
-        car_tt.reset_index(drop=True).to_feather(car_tt_path)
+    h5 = gtfs_path.split("/")[-1]+".h5"
+    if os.path.exists(f"{processed_path}/{h5}"):
+        ua.gtfs.network.load_processed_gtfs_data(h5, dir=processed_path)
     else:
-        print("Loading car travel times matrix")
-        car_tt = pd.read_feather(car_tt_path)
+        loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path, validation=False,
+                                                            verbose=True, bbox=bbox,
+                                                            remove_stops_outsidebbox=True,
+                                                            append_definitions=True)
+        ua.gtfs.network.create_transit_net(gtfsfeeds_dfs=loaded_feeds,
+                                           day='monday',
+                                           timerange=['07:00:00', '10:00:00'],
+                                           calendar_dates_lookup=None)
+        ua.gtfs.headways.headways(gtfsfeeds_df=loaded_feeds,headway_timerange=['07:00:00','10:00:00'])
+        ua.gtfs.network.save_processed_gtfs_data(loaded_feeds, h5, dir=processed_path)
 
-    pt_tt_path = f"{processed_path}/pt_tt.feather"
-    if not os.path.exists(pt_tt_path):
-        print("Computing public transports travel times matrix")
-        travel_time_matrix_computer = TravelTimeMatrixComputer(
-            transport_network,
-            departure=datetime.datetime(2023,7,1,8,30),
-            origins=grid,
-            transport_modes=[TransportMode.TRANSIT])
-        pt_tt = travel_time_matrix_computer.compute_travel_times()
-        pt_tt.reset_index(drop=True).to_feather(pt_tt_path)
-    else:
-        print("Loading public transports travel times matrix")
-        pt_tt = pd.read_feather(pt_tt_path)
+    edges["distance"] = edges.to_crs(2154).length
+    ua.osm.network.create_osm_net(osm_edges=edges, osm_nodes=nodes, travel_speed_mph=3)
 
-    walk_tt_path = f"{processed_path}/walk_tt.feather"
-    if not os.path.exists(walk_tt_path):
-        print("Computing walking travel times matrix")
-        travel_time_matrix_computer = TravelTimeMatrixComputer(
-            transport_network,
-            origins=grid,
-            transport_modes=[TransportMode.WALK])
-        walk_tt = travel_time_matrix_computer.compute_travel_times()
-        walk_tt.reset_index(drop=True).to_feather(walk_tt_path)
-    else:
-        print("Loading walk travel times matrix")
-        walk_tt = pd.read_feather(walk_tt_path)
-
-    bike_tt_path = f"{processed_path}/bike_tt.feather"
-    if not os.path.exists(bike_tt_path):
-        print("Computing bike travel times matrix")
-        travel_time_matrix_computer = TravelTimeMatrixComputer(
-            transport_network,
-            origins=grid,
-            transport_modes=[TransportMode.BICYCLE])
-        bike_tt = travel_time_matrix_computer.compute_travel_times()
-        bike_tt.reset_index(drop=True).to_feather(bike_tt_path)
-    else:
-        print("Loading bike travel times matrix")
-        bike_tt = pd.read_feather(bike_tt_path)
-#car_tt2, car_distances = get_matrices(graph, grid)
-from IPython import embed; embed()
+    urbanaccess_net = ua.network.ua_network
+    ua.network.integrate_network(urbanaccess_network=urbanaccess_net,
+                             headways=True,
+                             urbanaccess_gtfsfeeds_df=loaded_feeds,
+                             headway_statistic='mean')
+    from IPython import embed; embed()
