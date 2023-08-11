@@ -1,4 +1,4 @@
-data_path : /home/matthieu/mobility-referential/data
+data_path : /home/matt/git/mobility-referential/data
 municipalities_file: plaine-commune.txt
-gtfs_path: /home/matthieu/mobility-referential/data/IDFM-gtfs
+gtfs_path: /home/matt/git/mobility-referential/data/IDFM-gtfs
 grid_size: 30
