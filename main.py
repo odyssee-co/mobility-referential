@@ -118,6 +118,32 @@ def get_network(gdf):
     return graph
 
 
+def get_integrated_graph(gdf, graph):
+    bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
+    loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path, validation=True,
+                                                        verbose=True, bbox=bbox,
+                                                        remove_stops_outsidebbox=True,
+                                                        append_definitions=True)
+    ua.gtfs.network.create_transit_net(gtfsfeeds_dfs=loaded_feeds,
+                                       day='monday',
+                                       timerange=['07:00:00', '10:00:00'],
+                                       calendar_dates_lookup=None)
+    ua.gtfs.headways.headways(gtfsfeeds_df=loaded_feeds,headway_timerange=['07:00:00','10:00:00'])
+
+    nodes, edges = ox.graph_to_gdfs(graph)
+    edges["distance"] = edges.to_crs(2154).length
+    ua.osm.network.create_osm_net(osm_edges=edges, osm_nodes=nodes, travel_speed_mph=3)
+
+    urbanaccess_net = ua.network.ua_network
+
+    from IPython import embed; embed()
+    #TODO: does not work because of memory issues
+    ua.network.integrate_network(urbanaccess_network=urbanaccess_net,
+                             headways=True,
+                             urbanaccess_gtfsfeeds_df=loaded_feeds,
+                             headway_statistic='mean')
+    return urbanaccess_net
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(f"usage: python3 {sys.argv[0]} configuration_file")
@@ -145,31 +171,8 @@ if __name__ == "__main__":
     graph = get_network(gdf)
     grid = make_grid(gdf)
 
+    i_graph = get_integrated_graph(gdf, graph)
+
     #plot_grid(gdf, grid, graph)
 
     #car_tt2, car_distances = get_matrices(graph, grid)
-
-    nodes, edges = ox.graph_to_gdfs(graph)
-    bbox = gdf.dissolve().to_crs(4326).geometry[0]
-
-    h5 = gtfs_path.split("/")[-1]+".h5"
-    loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path, validation=False,
-                                                        verbose=True, bbox=bbox,
-                                                        remove_stops_outsidebbox=True,
-                                                        append_definitions=True)
-    ua.gtfs.network.create_transit_net(gtfsfeeds_dfs=loaded_feeds,
-                                       day='monday',
-                                       timerange=['07:00:00', '10:00:00'],
-                                       calendar_dates_lookup=None)
-    ua.gtfs.headways.headways(gtfsfeeds_df=loaded_feeds,headway_timerange=['07:00:00','10:00:00'])
-
-    edges["distance"] = edges.to_crs(2154).length
-    ua.osm.network.create_osm_net(osm_edges=edges, osm_nodes=nodes, travel_speed_mph=3)
-
-    urbanaccess_net = ua.network.ua_network
-
-    from IPython import embed; embed()
-    ua.network.integrate_network(urbanaccess_network=urbanaccess_net,
-                             headways=True,
-                             urbanaccess_gtfsfeeds_df=loaded_feeds,
-                             headway_statistic='mean')
