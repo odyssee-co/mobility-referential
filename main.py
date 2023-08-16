@@ -103,23 +103,48 @@ def get_grid_id(grid, x, y):
     return int(grid[g.geometry == nearest].index[0])
 
 def get_network(gdf):
-    if os.path.exists(path_graphml):
+    area = gdf.dissolve().to_crs(4326)
+    if os.path.exists(path_graph_drive):
         print("Loading road network")
-        graph = ox.load_graphml(path_graphml, edge_dtypes={"oneway":str})
+        graph_drive = ox.load_graphml(path_graph_drive)
     else:
         print("Downloading road network")
-        area = gdf.dissolve().to_crs(4326)
         #cf = '["highway"~"motorway|trunk|primary|secondary"]'
-        graph = ox.graph_from_polygon(area.geometry[0], network_type="all")
-        graph = ox.add_edge_speeds(graph)
-        graph = ox.add_edge_travel_times(graph)
+        graph_drive = ox.graph_from_polygon(area.geometry[0], network_type="drive")
+        graph_drive = ox.add_edge_speeds(graph_drive)
+        graph_drive = ox.add_edge_travel_times(graph_drive)
+        ox.save_graphml(graph_drive, filepath=path_graph_drive)
+
+    if os.path.exists(path_graph_walk):
+        print("Loading walk network")
+        graph_walk = ox.load_graphml(path_graph_walk)
+    else:
+        print("Downloading walk network")
+        #cf = '["highway"~"motorway|trunk|primary|secondary"]'
+        graph_walk = ox.graph_from_polygon(area.geometry[0], network_type="walk")
         #graph = ox.projection.project_graph(graph, to_crs=2154)
-        ox.save_graphml(graph, filepath=path_graphml)
-    return graph
+        ox.save_graphml(graph_walk, filepath=path_graph_walk)
+
+    if os.path.exists(path_graph_bike):
+        print("Loading bike network")
+        graph_bike = ox.load_graphml(path_graph_bike)
+    else:
+        print("Downloading bike network")
+        #cf = '["highway"~"motorway|trunk|primary|secondary"]'
+        graph_bike = ox.graph_from_polygon(area.geometry[0], network_type="bike")
+        #graph = ox.projection.project_graph(graph, to_crs=2154)
+        ox.save_graphml(graph_bike, filepath=path_graph_bike)
+
+    return graph_drive, graph_walk, graph_bike
 
 
-def get_integrated_graph(gdf, graph):
+def get_integrated_graph(gdf, graph_w):
     bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
+    G_proj = ox.project_graph(graph_w)
+    graph_w = ox.consolidate_intersections(G_proj, rebuild_graph=True, tolerance=40, dead_ends=False)
+    graph_w = ox.project_graph(graph_w, 4326)
+    nodes, edges = ox.graph_to_gdfs(graph_w)
+    print("Nombre de noeuds: ", len(nodes))
     loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path, validation=True,
                                                         verbose=True, bbox=bbox,
                                                         remove_stops_outsidebbox=True,
@@ -130,7 +155,6 @@ def get_integrated_graph(gdf, graph):
                                        calendar_dates_lookup=None)
     ua.gtfs.headways.headways(gtfsfeeds_df=loaded_feeds,headway_timerange=['07:00:00','10:00:00'])
 
-    nodes, edges = ox.graph_to_gdfs(graph)
     edges["distance"] = edges.to_crs(2154).length
     ua.osm.network.create_osm_net(osm_edges=edges, osm_nodes=nodes, travel_speed_mph=3)
 
@@ -138,6 +162,8 @@ def get_integrated_graph(gdf, graph):
 
     from IPython import embed; embed()
     #TODO: does not work because of memory issues
+
+
     ua.network.integrate_network(urbanaccess_network=urbanaccess_net,
                              headways=True,
                              urbanaccess_gtfsfeeds_df=loaded_feeds,
@@ -159,7 +185,9 @@ if __name__ == "__main__":
     #Create the processed data directory
     processed_path = f"{data_path}/processed/{municipalities_file.split('.')[0]}"
 
-    path_graphml = f"{processed_path}/graph.graphml"
+    path_graph_drive = f"{processed_path}/graph_drive.graphml"
+    path_graph_walk = f"{processed_path}/graph_walk.graphml"
+    path_graph_bike= f"{processed_path}/graph_bike.graphml"
     path_osm = f"{processed_path}/graph.osm"
     path_pbf = f"{processed_path}/graph.osm.pbf"
     zone_path = f"{processed_path}/zone.feather"
@@ -168,10 +196,10 @@ if __name__ == "__main__":
         os.mkdir(processed_path)
 
     gdf = get_gdf()
-    graph = get_network(gdf)
+    graph_d, graph_w, graph_b = get_network(gdf)
     grid = make_grid(gdf)
 
-    i_graph = get_integrated_graph(gdf, graph)
+    i_graph = get_integrated_graph(gdf, graph_w)
 
     #plot_grid(gdf, grid, graph)
 
