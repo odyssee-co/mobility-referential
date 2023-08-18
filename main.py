@@ -72,6 +72,8 @@ def make_grid(gdf):
         grid = gpd.clip(points, gdf)
         #grid = pd.DataFrame({"geometry":grid.geometry, "x":grid.geometry.x, "y":grid.geometry.y})
         grid = grid.reset_index(drop=True)
+        """
+        #Interpolate the grid to the existing nodes
         grid["id"]=ox.distance.nearest_nodes(graph, grid.geometry.x,
                                                grid.geometry.y, return_dist=False)
         nodes, roads = ox.graph_to_gdfs(graph)
@@ -79,6 +81,7 @@ def make_grid(gdf):
                                                     left_on="id",
                                                     right_on="osmid",
                                                     how="left")
+        """
         grid = gpd.GeoDataFrame(grid)
         grid.reset_index(drop=True).to_feather(grid_path)
     return grid
@@ -139,35 +142,54 @@ def get_network(gdf):
 
 
 def get_integrated_graph(gdf, graph_w):
-    bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
-    G_proj = ox.project_graph(graph_w)
-    graph_w = ox.consolidate_intersections(G_proj, rebuild_graph=True, tolerance=40, dead_ends=False)
-    graph_w = ox.project_graph(graph_w, 4326)
-    nodes, edges = ox.graph_to_gdfs(graph_w)
-    print("Nombre de noeuds: ", len(nodes))
-    loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path, validation=True,
-                                                        verbose=True, bbox=bbox,
-                                                        remove_stops_outsidebbox=True,
-                                                        append_definitions=True)
-    ua.gtfs.network.create_transit_net(gtfsfeeds_dfs=loaded_feeds,
-                                       day='monday',
-                                       timerange=['07:00:00', '10:00:00'],
-                                       calendar_dates_lookup=None)
-    ua.gtfs.headways.headways(gtfsfeeds_df=loaded_feeds,headway_timerange=['07:00:00','10:00:00'])
+    if os.path.exists(integrated_graph_path):
+        urbanaccess_net = ua.network.load_network(
+                            filename=os.path.basename(integrated_graph_path),
+                            dir=os.path.dirname(integrated_graph_path))
+    else:
+        bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
+        G_proj = ox.project_graph(graph_w)
+        """
+        TODO: oversimplified walk network (tolerance should be aroud 15), but with
+        less than 60 it takes more than 16GB memory to build the integrated net.
+        The transit net should be simplified instead.
+        """
+        graph_w = ox.consolidate_intersections(G_proj,
+                                               rebuild_graph=True,
+                                               tolerance=60,
+                                               dead_ends=False)
+        graph_w = ox.project_graph(graph_w, 4326)
+        nodes, edges = ox.graph_to_gdfs(graph_w)
+        print("Nombre de noeuds: ", len(nodes))
+        loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path,
+                                                   validation=True,
+                                                   verbose=True,
+                                                   bbox=bbox,
+                                                   remove_stops_outsidebbox=True,
+                                                   append_definitions=True)
+        ua.gtfs.network.create_transit_net(gtfsfeeds_dfs=loaded_feeds,
+                                           day='monday',
+                                           timerange=['07:00:00', '10:00:00'],
+                                           calendar_dates_lookup=None)
+        ua.gtfs.headways.headways(gtfsfeeds_df=loaded_feeds,
+                                  headway_timerange=['07:00:00','10:00:00'])
 
-    edges["distance"] = edges.to_crs(2154).length
-    ua.osm.network.create_osm_net(osm_edges=edges, osm_nodes=nodes, travel_speed_mph=3)
+        edges["distance"] = edges.to_crs(2154).length
+        ua.osm.network.create_osm_net(osm_edges=edges,
+                                      osm_nodes=nodes,
+                                      travel_speed_mph=3)
+        urbanaccess_net = ua.network.ua_network
 
-    urbanaccess_net = ua.network.ua_network
+        ua.network.integrate_network(urbanaccess_network=urbanaccess_net,
+                                 headways=True,
+                                 urbanaccess_gtfsfeeds_df=loaded_feeds,
+                                 headway_statistic='mean')
 
-    from IPython import embed; embed()
-    #TODO: does not work because of memory issues
-
-
-    ua.network.integrate_network(urbanaccess_network=urbanaccess_net,
-                             headways=True,
-                             urbanaccess_gtfsfeeds_df=loaded_feeds,
-                             headway_statistic='mean')
+        from IPython import embed; embed()
+        ua.network.save_network(urbanaccess_network=urbanaccess_net,
+                                filename=os.path.basename(integrated_graph_path),
+                                dir=os.path.dirname(integrated_graph_path),
+                                overwrite_key = True)
     return urbanaccess_net
 
 if __name__ == "__main__":
@@ -191,6 +213,7 @@ if __name__ == "__main__":
     path_osm = f"{processed_path}/graph.osm"
     path_pbf = f"{processed_path}/graph.osm.pbf"
     zone_path = f"{processed_path}/zone.feather"
+    integrated_graph_path= f"{processed_path}/integrated_graph.h5"
 
     if not os.path.isdir(processed_path):
         os.mkdir(processed_path)
