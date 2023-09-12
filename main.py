@@ -15,7 +15,7 @@ import pandas as pd
 from network import get_matrices
 import pandana as pdna
 import urbanaccess as ua
-
+from network_patched import integrate_network, save_network, load_network
 
 """
 #parameters to set all_oneway to true but it's buggy
@@ -142,11 +142,11 @@ def get_network(gdf):
 
 
 def get_integrated_graph(gdf, graph_w):
-    if os.path.exists(integrated_graph_path):
-        urbanaccess_net = ua.network.load_network(
-                            filename=os.path.basename(integrated_graph_path),
-                            dir=os.path.dirname(integrated_graph_path))
+    if os.path.exists(integrated_edges_path) and os.path.exists(integrated_nodes_path):
+        print("Loading integrated network")
+        urbanaccess_net = load_network(dir=processed_path)
     else:
+        print("Building integrated network")
         bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
         G_proj = ox.project_graph(graph_w)
         """
@@ -191,17 +191,15 @@ def get_integrated_graph(gdf, graph_w):
                                       travel_speed_mph=3)
         urbanaccess_net = ua.network.ua_network
 
-        ua.network.integrate_network(urbanaccess_network=urbanaccess_net,
+
+        #node_df = node_df[~node_df.id.isna()]
+        #edge_df = edge_df[~edge_df["from"].isna()]
+        integrate_network(urbanaccess_network=urbanaccess_net,
                                  headways=True,
                                  urbanaccess_gtfsfeeds_df=loaded_feeds,
                                  headway_statistic='mean')
 
-        """
-        ua.network.save_network(urbanaccess_network=urbanaccess_net,
-                                filename=os.path.basename(integrated_graph_path),
-                                dir=os.path.dirname(integrated_graph_path),
-                                overwrite_key = True)
-        """
+        save_network(urbanaccess_network=urbanaccess_net, dir=processed_path)
     return urbanaccess_net
 
 if __name__ == "__main__":
@@ -225,7 +223,8 @@ if __name__ == "__main__":
     path_osm = f"{processed_path}/graph.osm"
     path_pbf = f"{processed_path}/graph.osm.pbf"
     zone_path = f"{processed_path}/zone.feather"
-    integrated_graph_path= f"{processed_path}/integrated_graph.h5"
+    integrated_edges_path= f"{processed_path}/net_edges.feather"
+    integrated_nodes_path= f"{processed_path}/net_nodes.feather"
 
     if not os.path.isdir(processed_path):
         os.mkdir(processed_path)
