@@ -156,7 +156,7 @@ def get_integrated_graph(gdf, graph_w):
         """
         graph_w = ox.consolidate_intersections(G_proj,
                                                rebuild_graph=True,
-                                               tolerance=60,
+                                               tolerance=15,
                                                dead_ends=False)
         graph_w = ox.project_graph(graph_w, 4326)
         nodes, edges = ox.graph_to_gdfs(graph_w)
@@ -167,13 +167,24 @@ def get_integrated_graph(gdf, graph_w):
                                                    bbox=bbox,
                                                    remove_stops_outsidebbox=True,
                                                    append_definitions=True)
+        area = gdf.dissolve().to_crs(4326)
+        stops_inside_box = []
+        loaded_feeds.stops["geometry"] = gpd.points_from_xy(loaded_feeds.stops.stop_lon, loaded_feeds.stops.stop_lat)
+        print("Removing stops that are outside area")
+        for id, s in loaded_feeds.stops.iterrows():
+            if area.contains(s.geometry)[0]:
+                stops_inside_box.append(s.stop_id)
+        loaded_feeds.stops = loaded_feeds.stops[loaded_feeds.stops['stop_id'].
+                                                        isin(stops_inside_box)]
+        loaded_feeds.stop_times = loaded_feeds.stop_times[loaded_feeds.
+                                    stop_times['stop_id'].isin(stops_inside_box)]
+
         ua.gtfs.network.create_transit_net(gtfsfeeds_dfs=loaded_feeds,
                                            day='monday',
                                            timerange=['07:00:00', '10:00:00'],
                                            calendar_dates_lookup=None)
         ua.gtfs.headways.headways(gtfsfeeds_df=loaded_feeds,
                                   headway_timerange=['07:00:00','10:00:00'])
-
         edges["distance"] = edges.to_crs(2154).length
         ua.osm.network.create_osm_net(osm_edges=edges,
                                       osm_nodes=nodes,
@@ -185,11 +196,12 @@ def get_integrated_graph(gdf, graph_w):
                                  urbanaccess_gtfsfeeds_df=loaded_feeds,
                                  headway_statistic='mean')
 
-        from IPython import embed; embed()
+        """
         ua.network.save_network(urbanaccess_network=urbanaccess_net,
                                 filename=os.path.basename(integrated_graph_path),
                                 dir=os.path.dirname(integrated_graph_path),
                                 overwrite_key = True)
+        """
     return urbanaccess_net
 
 if __name__ == "__main__":
@@ -223,6 +235,7 @@ if __name__ == "__main__":
     grid = make_grid(gdf)
 
     i_graph = get_integrated_graph(gdf, graph_w)
+    from IPython import embed; embed()
 
     #plot_grid(gdf, grid, graph)
 
