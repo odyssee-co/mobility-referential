@@ -3,6 +3,18 @@ import osmnx as ox
 import pandas as pd
 
 def get_route_details(graph, route):
+    """
+    Calculate travel time and distance for a given route on a graph.
+
+    Parameters:
+    - graph (NetworkX Graph): The graph representing the transportation network.
+    - route (list): A list of nodes representing the route to be analyzed.
+
+    Returns:
+    - travel_time (float): The total travel time along the route (sum of travel times for individual edges).
+    - distance (float): The total distance covered along the route (sum of edge lengths).
+    """
+
     travel_time = 0
     distance = 0
     if not route:
@@ -14,6 +26,22 @@ def get_route_details(graph, route):
     return travel_time, distance
 
 def get_matrices(graph, grid):
+    """
+    Calculate travel time and distance matrices for pairs of locations in a grid
+    using a given network graph.
+
+    Parameters:
+    - graph (ox.Graph): The network graph representing the transportation network.
+    - grid (pd.DataFrame): A DataFrame containing information about grid locations,
+      including their IDs.
+
+    Returns:
+    - tt_matrix (pd.DataFrame): A DataFrame containing travel time values between
+      each pair of locations.
+    - d_matrix (pd.DataFrame): A DataFrame containing distance values between
+      each pair of locations.
+    """
+
     tt_matrix = []
     d_matrix = []
     for i, j in product(grid.index, grid.index):

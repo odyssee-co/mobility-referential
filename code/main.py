@@ -15,7 +15,7 @@ import pandas as pd
 from network import get_matrices
 import pandana as pdna
 import urbanaccess as ua
-from network_patched import integrate_network, save_network, load_network
+from patched_urbanaccess import integrate_network, save_network, load_network
 
 """
 #parameters to set all_oneway to true but it's buggy
