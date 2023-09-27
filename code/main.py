@@ -15,7 +15,7 @@ import pandas as pd
 from network import get_matrices
 import pandana as pdna
 import urbanaccess as ua
-from patched_urbanaccess import integrate_network, save_network, load_network
+from utils import save_network, load_network
 
 """
 #parameters to set all_oneway to true but it's buggy
@@ -33,7 +33,15 @@ ox.settings.useful_tags_way = utw
 """
 
 def get_gdf():
-    #Process the zone from the given input departments
+    """
+    Load or process a GeoDataFrame (gdf) representing a specific geographic zone
+    by filtering it based on a list of municipality IDs read from a file.
+    The resulting GeoDataFrame is then saved as a Feather file for future use and returned.
+
+    Returns:
+    - gdf (geopandas.GeoDataFrame): A GeoDataFrame representing the geographic zone.
+    """
+
     if os.path.exists(zone_path):
         print("Loading zone...")
         gdf = gpd.read_feather(zone_path)
@@ -48,8 +56,15 @@ def get_gdf():
 
 def make_grid(gdf):
     """
-    Compute a grid that cover uniformly the gdf shape
+    Compute a grid that uniformly covers the shape of the input GeoDataFrame (gdf).
+
+    Parameters:
+    - gdf (geopandas.GeoDataFrame): The input GeoDataFrame representing a geographic area.
+
+    Returns:
+    - grid (geopandas.GeoDataFrame): A GeoDataFrame representing the computed grid.
     """
+
     grid_path = f"{processed_path}/grid.feather"
     if os.path.exists(grid_path):
         print("Loading grid...")
@@ -97,8 +112,17 @@ def plot_grid(gdf, grid, graph):
 
 def get_grid_id(grid, x, y):
     """
-    Return the nearest grid centroid from the x, y coordinates of a point
+    Return the nearest grid centroid ID from the given x and y coordinates of a point.
+
+    Parameters:
+    - grid (geopandas.GeoDataFrame): The GeoDataFrame representing the grid centroids.
+    - x (float): The x-coordinate (longitude) of the point.
+    - y (float): The y-coordinate (latitude) of the point.
+
+    Returns:
+    - int: The ID of the nearest grid centroid to the provided coordinates (x, y).
     """
+
     geometry = gpd.GeoSeries(gpd.points_from_xy(grid.x, grid.y))
     g = grid.copy()
     g["geometry"] = geometry
@@ -106,6 +130,20 @@ def get_grid_id(grid, x, y):
     return int(grid[g.geometry == nearest].index[0])
 
 def get_network(gdf):
+    """
+    Retrieve or download road, walk, and bike network graphs for a specific
+    geographic area.
+
+    Parameters:
+    - gdf (geopandas.GeoDataFrame): The GeoDataFrame representing the
+      geographic area of interest.
+
+    Returns:
+    - graph_drive (ox.Graph): The road network graph for driving.
+    - graph_walk (ox.Graph): The network graph for walking.
+    - graph_bike (ox.Graph): The network graph for biking.
+    """
+
     area = gdf.dissolve().to_crs(4326)
     if os.path.exists(path_graph_drive):
         print("Loading road network")
@@ -142,31 +180,51 @@ def get_network(gdf):
 
 
 def get_integrated_graph(gdf, graph_w):
+    """
+    Retrieve or build an integrated multi-modal transportation network graph
+    for a specified geographic area.
+
+    Parameters:
+    - gdf (geopandas.GeoDataFrame): The GeoDataFrame representing the geographic
+      area of interest.
+    - graph_w (ox.Graph): The walking network graph for the same area.
+
+    Returns:
+    - urbanaccess_net (ua.network.ua_network): The integrated multi-modal
+      transportation network.
+    """
     if os.path.exists(integrated_edges_path) and os.path.exists(integrated_nodes_path):
         print("Loading integrated network")
         urbanaccess_net = load_network(dir=processed_path)
     else:
         print("Building integrated network")
         bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
+        """
+        #Simplify walking graph
         G_proj = ox.project_graph(graph_w)
-        """
-        TODO: oversimplified walk network (tolerance should be aroud 15), but with
-        less than 60 it takes more than 16GB memory to build the integrated net.
-        The transit net should be simplified instead.
-        """
         graph_w = ox.consolidate_intersections(G_proj,
                                                rebuild_graph=True,
                                                tolerance=15,
                                                dead_ends=False)
         graph_w = ox.project_graph(graph_w, 4326)
+        """
+
         nodes, edges = ox.graph_to_gdfs(graph_w)
-        print("Nombre de noeuds: ", len(nodes))
+        nodes["id"]=nodes.index
+        edges["distance"] = edges.to_crs(2154).length
+        edges["from"]=edges.index.get_level_values(0)
+        edges["to"]=edges.index.get_level_values(1)
+        ua.osm.network.create_osm_net(osm_edges=edges,
+                                      osm_nodes=nodes,
+                                      travel_speed_mph=3)
+
         loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path,
                                                    validation=True,
                                                    verbose=True,
                                                    bbox=bbox,
                                                    remove_stops_outsidebbox=True,
                                                    append_definitions=True)
+        #Simplify transit feeds
         area = gdf.dissolve().to_crs(4326)
         stops_inside_box = []
         loaded_feeds.stops["geometry"] = gpd.points_from_xy(loaded_feeds.stops.stop_lon, loaded_feeds.stops.stop_lat)
@@ -185,20 +243,12 @@ def get_integrated_graph(gdf, graph_w):
                                            calendar_dates_lookup=None)
         ua.gtfs.headways.headways(gtfsfeeds_df=loaded_feeds,
                                   headway_timerange=['07:00:00','10:00:00'])
-        edges["distance"] = edges.to_crs(2154).length
-        ua.osm.network.create_osm_net(osm_edges=edges,
-                                      osm_nodes=nodes,
-                                      travel_speed_mph=3)
         urbanaccess_net = ua.network.ua_network
 
-
-        #node_df = node_df[~node_df.id.isna()]
-        #edge_df = edge_df[~edge_df["from"].isna()]
-        integrate_network(urbanaccess_network=urbanaccess_net,
+        ua.integrate_network(urbanaccess_network=urbanaccess_net,
                                  headways=True,
                                  urbanaccess_gtfsfeeds_df=loaded_feeds,
                                  headway_statistic='mean')
-
         save_network(urbanaccess_network=urbanaccess_net, dir=processed_path)
     return urbanaccess_net
 
