@@ -12,10 +12,12 @@ import matplotlib.pyplot as plt
 from shapely.ops import nearest_points
 import osmnx as ox
 import pandas as pd
-from network import get_matrices
+from network import get_matrices, create_graph
 import pandana as pdna
 import urbanaccess as ua
 from utils import save_network, load_network
+from pandana.loaders import osm
+import random
 
 """
 #parameters to set all_oneway to true but it's buggy
@@ -31,6 +33,26 @@ ox.settings.all_oneway = True
 ox.settings.useful_tags_node = utn
 ox.settings.useful_tags_way = utw
 """
+
+def random_point_in_polygon(polygon):
+    """
+    This function generates a random point within a given polygon. It ensures that the generated point is located
+    inside the specified polygon by repeatedly generating points within the bounding box of the polygon until
+    a point inside the polygon is found.
+
+    Parameters:
+        polygon (shapely.geometry.Polygon): The polygon within which to generate the random point.
+
+    Returns:
+        tuple: A tuple containing the x and y coordinates of the generated random point.
+    """
+    # Generate a random point within the bounding box of the polygon
+    min_x, min_y, max_x, max_y = polygon.bounds
+    random_point = Point(random.uniform(min_x, max_x), random.uniform(min_y, max_y))
+    # Check if the random point is within the polygon
+    while not polygon.contains(random_point):
+        random_point = Point(random.uniform(min_x, max_x), random.uniform(min_y, max_y))
+    return random_point.x, random_point.y
 
 def get_gdf():
     """
@@ -250,6 +272,7 @@ def get_integrated_graph(gdf, graph_w):
                                  urbanaccess_gtfsfeeds_df=loaded_feeds,
                                  headway_statistic='mean')
         save_network(urbanaccess_network=urbanaccess_net, dir=processed_path)
+        #TODO: check miles km compatibility
     return urbanaccess_net
 
 if __name__ == "__main__":
@@ -283,8 +306,38 @@ if __name__ == "__main__":
     graph_d, graph_w, graph_b = get_network(gdf)
     grid = make_grid(gdf)
 
-    i_graph = get_integrated_graph(gdf, graph_w)
+    # Create the transit/walk multimodal network
+    urbanaccess_net = get_integrated_graph(gdf, graph_w)
+    nodes = urbanaccess_net.net_nodes
+    edges = urbanaccess_net.net_edges
+
+    # Remove edges with uknown nodes
+    edges = edges[edges['to_int'].isin(nodes.index) & edges['from_int'].isin(nodes.index)]
+
+    # Create a hierarchical graph to greatly improve the shortest paths computations
+    # see: "A Generalized Computational Framework for Accessibility: From
+    # the Pedestrian to the Metropolitan Scale" for more details
+    transit_ped_net = pdna.Network(nodes["x"],
+                                   nodes["y"],
+                                   edges["from_int"],
+                                   edges["to_int"],
+                                   edges[["weight"]],
+                                   twoway=False)
+    transit_ped_net.precompute(3000)
+    bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
+
+    #restaurants = osm.node_query(bbox[1], bbox[0], bbox[3], bbox[2],
+    #                             tags='"amenity"="restaurant"')
+    polygon = gdf.dissolve().to_crs(4326).geometry[0]
+
+    r1 = random_point_in_polygon(polygon)
+    r2 = random_point_in_polygon(polygon)
+    res = pd.DataFrame([r1, r2], columns=["lon", "lat"])
+    nodes_ids = transit_ped_net.get_node_ids(res.lon, res.lat).values
+    shortest_path = transit_ped_net.shortest_path(nodes_ids[0], nodes_ids[1])
     from IPython import embed; embed()
+
+    #graph_i = create_graph(urbanaccess_net.net_nodes, urbanaccess_net.net_edges)
 
     #plot_grid(gdf, grid, graph)
 

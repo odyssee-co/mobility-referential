@@ -1,6 +1,27 @@
 from tqdm.contrib.itertools import product
 import osmnx as ox
 import pandas as pd
+import networkx as nx
+
+def create_graph(nodes, edges, retain_all=False, bidirectional=False):
+    metadata = {
+        "crs": 4326,
+    }
+    G = nx.MultiDiGraph(**metadata)
+    # Add nodes from the nodes DataFrame
+
+    for _, row in nodes.iterrows():
+        G.add_node(row['NodeID'], Attribute1=row['Attribute1'])
+
+    # Add edges from the edges DataFrame
+    for _, row in edges.iterrows():
+        G.add_edge(row['Source'], row['Target'], weight=row['Weight'])
+
+    # retain only the largest connected component if retain_all is False
+    if not retain_all:
+        G = ox.utils_graph.get_largest_component(G)
+    return G
+
 
 def get_route_details(graph, route):
     """
