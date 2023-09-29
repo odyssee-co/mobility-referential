@@ -8,11 +8,12 @@ import datetime
 import numpy as np
 from itertools import product
 from shapely.geometry import Point
-import matplotlib.pyplot as plt
+import matplotlib
+from matplotlib import pyplot as plt
 from shapely.ops import nearest_points
 import osmnx as ox
 import pandas as pd
-from network import get_matrices, create_graph
+from network import get_matrices, create_graph, get_route_details
 import pandana as pdna
 import urbanaccess as ua
 from utils import save_network, load_network
@@ -308,10 +309,10 @@ if __name__ == "__main__":
 
     # Create the transit/walk multimodal network
     urbanaccess_net = get_integrated_graph(gdf, graph_w)
-    nodes = urbanaccess_net.net_nodes
-    edges = urbanaccess_net.net_edges
 
     # Remove edges with uknown nodes
+    nodes = urbanaccess_net.net_nodes
+    edges = urbanaccess_net.net_edges
     edges = edges[edges['to_int'].isin(nodes.index) & edges['from_int'].isin(nodes.index)]
 
     # Create a hierarchical graph to greatly improve the shortest paths computations
@@ -324,21 +325,55 @@ if __name__ == "__main__":
                                    edges[["weight"]],
                                    twoway=False)
     transit_ped_net.precompute(3000)
+    network = transit_ped_net
+
+    #find distance between two random points
     bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
-
-    #restaurants = osm.node_query(bbox[1], bbox[0], bbox[3], bbox[2],
-    #                             tags='"amenity"="restaurant"')
     polygon = gdf.dissolve().to_crs(4326).geometry[0]
-
     r1 = random_point_in_polygon(polygon)
     r2 = random_point_in_polygon(polygon)
     res = pd.DataFrame([r1, r2], columns=["lon", "lat"])
-    nodes_ids = transit_ped_net.get_node_ids(res.lon, res.lat).values
-    shortest_path = transit_ped_net.shortest_path(nodes_ids[0], nodes_ids[1])
+    nodes_ids = network.get_node_ids(res.lon, res.lat).values
+    shortest_path = network.shortest_path(nodes_ids[0], nodes_ids[1])
+    #network.shortest_path_length(nodes_ids[0], nodes_ids[1])
+    graph_i = create_graph(urbanaccess_net.net_nodes, urbanaccess_net.net_edges)
+
     from IPython import embed; embed()
+    get_route_details(graph_i, list(shortest_path))
 
-    #graph_i = create_graph(urbanaccess_net.net_nodes, urbanaccess_net.net_edges)
+    """
+    #find distance matrix between all restaurants to all restaurant
+    restaurants = osm.node_query(bbox[1], bbox[0], bbox[3], bbox[2],
+                                 tags='"amenity"="restaurant"')
+    restaurant_nodes = network.get_node_ids(restaurants.lon, restaurants.lat)
+    origs = [o for o in restaurant_nodes.values for d in restaurant_nodes.values]
+    dests = [d for o in restaurant_nodes.values for d in restaurant_nodes.values]
+    # this vectorized version of the shortest path computation is way more efficient
+    distances = network.shortest_path_lengths(origs, dests)
+    print(distances)
 
+    #find the closest restaurants to each node
+    network.set_pois(category = 'restaurants',
+                     maxdist = 1000,
+                     maxitems = 3,
+                     x_col = restaurants.lon,
+                     y_col = restaurants.lat)
+    results = network.nearest_pois(distance = 1000,
+                                   category = 'restaurants',
+                                   num_pois = 3,
+                                   include_poi_ids = True)
+    print(results.head())
+
+    #how many restaurants are within 20min meters of each node?
+    network.set(restaurant_nodes, name = 'restaurants')
+    accessibility = network.aggregate(distance = 20, type = 'count', name = 'restaurants')
+    accessibility.describe()
+    fig, ax = plt.subplots(figsize=(10,8))
+    plt.title('Restaurants within 20min transportation')
+    plt.scatter(network.nodes_df.x, network.nodes_df.y,
+                c=accessibility, s=1, cmap='YlOrRd',
+                norm=matplotlib.colors.LogNorm())
+    cb = plt.colorbar()
+    plt.show()
+    """
     #plot_grid(gdf, grid, graph)
-
-    #car_tt2, car_distances = get_matrices(graph, grid)

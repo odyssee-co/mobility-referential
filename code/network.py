@@ -2,20 +2,25 @@ from tqdm.contrib.itertools import product
 import osmnx as ox
 import pandas as pd
 import networkx as nx
+import numpy as np
+
 
 def create_graph(nodes, edges, retain_all=False, bidirectional=False):
     metadata = {
         "crs": 4326,
     }
     G = nx.MultiDiGraph(**metadata)
-    # Add nodes from the nodes DataFrame
 
-    for _, row in nodes.iterrows():
-        G.add_node(row['NodeID'], Attribute1=row['Attribute1'])
+    # Add nodes from the nodes DataFrame
+    for id, row in nodes.iterrows():
+        G.add_node(id)
 
     # Add edges from the edges DataFrame
     for _, row in edges.iterrows():
-        G.add_edge(row['Source'], row['Target'], weight=row['Weight'])
+        G.add_edge(row['from_int'],
+                   row['to_int'],
+                   travel_time=row['weight'],
+                   length=row["distance"])
 
     # retain only the largest connected component if retain_all is False
     if not retain_all:
@@ -35,7 +40,6 @@ def get_route_details(graph, route):
     - travel_time (float): The total travel time along the route (sum of travel times for individual edges).
     - distance (float): The total distance covered along the route (sum of edge lengths).
     """
-
     travel_time = 0
     distance = 0
     if not route:
@@ -43,8 +47,10 @@ def get_route_details(graph, route):
     for i in range(len(route)-1):
         data = graph.get_edge_data(route[i], route[i+1])[0]
         travel_time += data["travel_time"]
-        distance += data["length"]
+        if not np.isnan(data["length"]): #necessary because tt travels have nan distances
+            distance += data["length"]
     return travel_time, distance
+
 
 def get_matrices(graph, grid):
     """
