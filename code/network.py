@@ -28,7 +28,10 @@ class Network():
             print(f"Downloading {self.mode} network")
             #cf = '["highway"~"motorway|trunk|primary|secondary"]'
             if self.mode == "transit":
-                graph = ox.graph_from_polygon(area.geometry[0], network_type="walk")
+                if os.path.exists(f"{self.processed_path}/graph_walk.graphml"):
+                    graph = ox.load_graphml(path)
+                else:
+                    graph = ox.graph_from_polygon(area.geometry[0], network_type="walk")
                 urbanaccess_net = get_integrated_graph(self.gdf, graph, self.processed_path, self.gtfs_path)
                 graph = create_nx_graph(urbanaccess_net.net_nodes, urbanaccess_net.net_edges)
                 ox.save_graphml(graph, filepath=path)

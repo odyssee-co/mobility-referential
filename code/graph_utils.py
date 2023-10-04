@@ -6,6 +6,8 @@ import osmnx as ox
 import pandana as pdn
 import urbanaccess as ua
 import os
+from urbanaccess.network import ua_network
+from patched_ua import integrate_network
 
 # Convert the .osm file to .osm.pbf format using osmium
 class OSMToPBFHandler(osmium.SimpleHandler):
@@ -43,21 +45,8 @@ def osm_to_pbf(graph_input, graph_output):
     writer.close()
 
 
+"""
 class urbanaccess_network(object):
-    """
-    A urbanaccess object of Pandas DataFrames representing
-    the components of a graph network
-
-    Parameters
-    ----------
-    transit_nodes : pandas.DataFrame
-    transit_edges : pandas.DataFrame
-    net_connector_edges : pandas.DataFrame
-    osm_nodes : pandas.DataFrame
-    osm_edges : pandas.DataFrame
-    net_nodes : pandas.DataFrame
-    net_edges : pandas.DataFrame
-    """
     def __init__(self,
                  transit_nodes=pd.DataFrame(),
                  transit_edges=pd.DataFrame(),
@@ -73,6 +62,8 @@ class urbanaccess_network(object):
         self.osm_edges = osm_edges
         self.net_nodes = net_nodes
         self.net_edges = net_edges
+
+"""
 
 def save_network(urbanaccess_network, dir):
     """
@@ -115,7 +106,7 @@ def load_network(dir):
     ua_network.net_edges : object
     ua_network.net_nodes : object
     """
-    ua_network = urbanaccess_network()
+    #ua_network = urbanaccess_network()
     ua_network.net_edges = pd.read_feather(f"{dir}/net_edges.feather")
     ua_network.net_nodes = pd.read_feather(f"{dir}/net_nodes.feather")
     return ua_network
@@ -191,12 +182,21 @@ def get_integrated_graph(gdf, graph_w, processed_path, gtfs_path):
         bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
         nodes, edges = ox.graph_to_gdfs(graph_w)
         nodes["id"]=nodes.index
-        edges["distance"] = edges.to_crs(2154).length
+
+        edges = edges.to_crs("epsg:32633")
+        edges["distance"] = edges["length"]
+        #edges["distance"] = edges.to_crs(2154).length
+
         edges["from"]=edges.index.get_level_values(0)
         edges["to"]=edges.index.get_level_values(1)
-        ua.osm.network.create_osm_net(osm_edges=edges,
-                                      osm_nodes=nodes,
-                                      travel_speed_mph=3)
+
+        walking_speed_kph = 4.8
+        edges['weight'] = edges["distance"] / ((walking_speed_kph*1000)/60)
+        # assign node and edge net type
+        edges['net_type'] = "walk"
+        nodes['net_type'] = "walk"
+        ua_network.osm_nodes = nodes
+        ua_network.osm_edges = edges
 
         loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path,
                                                    validation=True,
@@ -225,10 +225,11 @@ def get_integrated_graph(gdf, graph_w, processed_path, gtfs_path):
                                   headway_timerange=['07:00:00','10:00:00'])
         urbanaccess_net = ua.network.ua_network
 
-        ua.integrate_network(urbanaccess_network=urbanaccess_net,
+        integrate_network(urbanaccess_network=urbanaccess_net,
                                  headways=True,
                                  urbanaccess_gtfsfeeds_df=loaded_feeds,
                                  headway_statistic='mean')
+
+        urbanaccess_net.net_edges["weight"] *= 60 #to convert time in seconds
         save_network(urbanaccess_network=urbanaccess_net, dir=processed_path)
-        #TODO: check miles km compatibility
     return urbanaccess_net
