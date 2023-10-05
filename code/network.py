@@ -2,7 +2,7 @@ import osmnx as ox
 import pandas as pd
 import numpy as np
 import os
-from graph_utils import create_nx_graph, create_pdn_graph, get_integrated_graph
+from graph_utils import create_nx_graph, create_pdn_graph, get_integrated_graph, load_graph, save_graph
 import networkx as nx
 from IPython import embed
 
@@ -15,56 +15,64 @@ class Network():
         self.gdf = gdf
         self.mode = mode
         self.gtfs_path = gtfs_path
-        self.ml, self.pdn = self.create_network()
+        self.create_network()
 
 
     def create_network(self):
         area = self.gdf.dissolve().to_crs(4326)
-        path = f"{self.processed_path}/graph_{self.mode}.graphml"
+        path = f"{self.processed_path}/{self.mode}.pkl"
         if os.path.exists(path):
             print(f"Loading {self.mode} network")
-            graph = ox.load_graphml(path)
+            nodes, edges = load_graph(path)
         else:
-            print(f"Downloading {self.mode} network")
             #cf = '["highway"~"motorway|trunk|primary|secondary"]'
             if self.mode == "transit":
-                if os.path.exists(f"{self.processed_path}/graph_walk.graphml"):
-                    graph = ox.load_graphml(path)
+                graph_w_path = f"{self.processed_path}/walk.pkl"
+                if os.path.exists(graph_w_path):
+                    nodes, edges = load_graph(graph_w_path)
                 else:
+                    print("Downloading walk network")
                     graph = ox.graph_from_polygon(area.geometry[0], network_type="walk")
-                urbanaccess_net = get_integrated_graph(self.gdf, graph, self.processed_path, self.gtfs_path)
-                graph = create_nx_graph(urbanaccess_net.net_nodes, urbanaccess_net.net_edges)
-                ox.save_graphml(graph, filepath=path)
+                    nodes, edges = ox.graph_to_gdfs(graph)
+                nodes, edges = get_integrated_graph(self.gdf, nodes, edges, self.processed_path, self.gtfs_path)
             else:
+                print(f"Downloading {self.mode} network")
                 graph = ox.graph_from_polygon(area.geometry[0], network_type=self.mode)
                 if self.mode=="drive":
                     graph = ox.add_edge_speeds(graph)
                     graph = ox.add_edge_travel_times(graph)
+                    nodes, edges = ox.graph_to_gdfs(graph)
                 elif self.mode=="bike":
-                    edges = ox.graph_to_gdfs(graph, nodes=False)
+                    nodes, edges = ox.graph_to_gdfs(graph)
                     edges = edges.to_crs("epsg:32633") #because bike network is projected
                     travel_time = edges["length"] / (20/3.6) #TODO adapt bike speed to topography
                     edges["travel_time"] = travel_time.values
-                    nx.set_edge_attributes(graph, values=edges["travel_time"], name="travel_time")
-                    nx.set_edge_attributes(graph, values=edges["geometry"], name="geometry")
                 elif self.mode=="walk":
-                    edges = ox.graph_to_gdfs(graph, nodes=False)
-                    travel_time =  edges["length"] / (4.8/3.6) #4.8 Km/H = 3 M/H
+                    nodes, edges = ox.graph_to_gdfs(graph)
+                    travel_time =  edges["length"] / (4.8/3.6)
                     edges["travel_time"] = travel_time.values
-                    nx.set_edge_attributes(graph, values=edges["travel_time"], name="travel_time")
-                ox.save_graphml(graph, filepath=path)
-        nodes, edges = ox.graph_to_gdfs(graph)
-        edges["weight"] = edges.travel_time
-        edges["from_int"]=edges.index.get_level_values(0)
-        edges["to_int"]=edges.index.get_level_values(1)
-        pdn_graph = create_pdn_graph(nodes, edges)
-        return graph, pdn_graph
+                edges["weight"] = edges.travel_time
+                edges["from_int"]=edges.index.get_level_values(0)
+                edges["to_int"]=edges.index.get_level_values(1)
+            save_graph(nodes, edges, path)
+        self.pdn = create_pdn_graph(nodes, edges)
+        self.nodes = nodes
+        self.edges= edges
+
+
+    def convert_path_to_osmid(self, path):
+        path_osmid = []
+        for n in path:
+            path_osmid.append(self.nodes.loc[n].id)
+        return path_osmid
 
 
     def shortest_path(self, r1, r2):
         req = pd.DataFrame([r1, r2], columns=["lon", "lat"])
         nodes_ids = self.pdn.get_node_ids(req.lon, req.lat).values
         shortest_path = self.pdn.shortest_path(nodes_ids[0], nodes_ids[1])
+        if self.mode == "transit":
+            shortest_path = self.convert_path_to_osmid(shortest_path)
         travel_time, distance = self.get_route_details(list(shortest_path))
         res = { "shortest_path": shortest_path,
                 "travel_time"  : travel_time,
@@ -86,12 +94,13 @@ class Network():
         """
         travel_time = 0
         distance = 0
+
         if not route:
             return None, None
         for i in range(len(route)-1):
-            data = self.ml.get_edge_data(route[i], route[i+1])[0]
+            data = self.edges.loc[route[i], route[i+1], 0]
             travel_time += data["travel_time"]
-            if not np.isnan(data["length"]): #necessary because tt travels have nan distances
+            if not np.isnan(data["length"]): #tt travels have nan distances
                 distance += data["length"]
         return travel_time, distance
 

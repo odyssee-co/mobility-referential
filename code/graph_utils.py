@@ -1,13 +1,13 @@
 import osmium
-import pandas as pd
 import geopandas as gpd
 import networkx as nx
 import osmnx as ox
 import pandana as pdn
 import urbanaccess as ua
-import os
 from urbanaccess.network import ua_network
 from patched_ua import integrate_network
+import pickle
+from IPython import embed
 
 # Convert the .osm file to .osm.pbf format using osmium
 class OSMToPBFHandler(osmium.SimpleHandler):
@@ -45,71 +45,39 @@ def osm_to_pbf(graph_input, graph_output):
     writer.close()
 
 
-"""
-class urbanaccess_network(object):
-    def __init__(self,
-                 transit_nodes=pd.DataFrame(),
-                 transit_edges=pd.DataFrame(),
-                 net_connector_edges=pd.DataFrame(),
-                 osm_nodes=pd.DataFrame(),
-                 osm_edges=pd.DataFrame(),
-                 net_nodes=pd.DataFrame(),
-                 net_edges=pd.DataFrame()):
-        self.transit_nodes = transit_nodes
-        self.transit_edges = transit_edges
-        self.net_connector_edges = net_connector_edges
-        self.osm_nodes = osm_nodes
-        self.osm_edges = osm_edges
-        self.net_nodes = net_nodes
-        self.net_edges = net_edges
+def save_graph(nodes, edges, path):
+    if edges.empty or nodes.empty:
+        raise ValueError("Net_edges or net_nodes are empty.")
+    nodes = gpd.GeoDataFrame(nodes)
+    edges = gpd.GeoDataFrame(edges)
+    graph = {"nodes": nodes, "edges": edges}
+    with open(path, "wb") as file:
+        pickle.dump(graph, file)
+
+
+def load_graph(path):
+    with open(path, "rb") as file:
+        graph = pickle.load(file)
+    nodes = graph["nodes"]
+    edges = graph["edges"]
+    return nodes, edges
+
 
 """
+def save_graph(nodes, edges, dir, name):
+    if edges.empty or nodes.empty:
+        raise ValueError("Net_edges or net_nodes are empty.")
+    nodes = gpd.GeoDataFrame(nodes)
+    nodes.reset_index(drop=True).to_feather(f"{dir}/{name}_nodes.feather")
+    edges = gpd.GeoDataFrame(edges)
+    edges.reset_index(drop=True).to_feather(f"{dir}/{name}_edges.feather")
 
-def save_network(urbanaccess_network, dir):
-    """
-    Write a urbanaccess_network integrated nodes and edges to a node and edge
-    feather files
 
-    Parameters
-    ----------
-    urbanaccess_network : object
-        urbanaccess_network object with net_edges and net_nodes DataFrames
-    dir : string
-        directory to save feather files
-
-    Returns
-    -------
-    None
-    """
-    if urbanaccess_network is None or urbanaccess_network.net_edges.empty or \
-            urbanaccess_network.net_nodes.empty:
-        raise ValueError('Either no urbanaccess_network specified or '
-                         'net_edges or net_nodes are empty.')
-    urbanaccess_network.net_edges = gpd.GeoDataFrame(urbanaccess_network.net_edges)
-    urbanaccess_network.net_edges.reset_index(drop=True).to_feather(f"{dir}/net_edges.feather")
-    urbanaccess_network.net_nodes = gpd.GeoDataFrame(urbanaccess_network.net_nodes)
-    urbanaccess_network.net_nodes.reset_index(drop=True).to_feather(f"{dir}/net_nodes.feather")
-
-def load_network(dir):
-    """
-    Read an integrated network node and edge data from feather files to
-    a urbanaccess_network object
-
-    Parameters
-    ----------
-    dir : string
-        directory to read feather files
-    Returns
-    -------
-    ua_network : object
-        urbanaccess_network object with net_edges and net_nodes DataFrames
-    ua_network.net_edges : object
-    ua_network.net_nodes : object
-    """
-    #ua_network = urbanaccess_network()
-    ua_network.net_edges = pd.read_feather(f"{dir}/net_edges.feather")
-    ua_network.net_nodes = pd.read_feather(f"{dir}/net_nodes.feather")
-    return ua_network
+def load_graph(dir, name):
+    nodes = pd.read_feather(f"{dir}/{name}_nodes.feather")
+    edges = pd.read_feather(f"{dir}/{name}_edges.feather")
+    return nodes, edges
+"""
 
 
 def create_nx_graph(nodes, edges, retain_all=False, bidirectional=False):
@@ -119,17 +87,17 @@ def create_nx_graph(nodes, edges, retain_all=False, bidirectional=False):
     G = nx.MultiDiGraph(**metadata)
 
     # Remove edges with uknown nodes
-    edges = edges[edges['to_int'].isin(nodes.index) & edges['from_int'].isin(nodes.index)]
+    edges = edges[edges["to_int"].isin(nodes.index) & edges["from_int"].isin(nodes.index)]
 
     # Add nodes from the nodes DataFrame
     for id, row in nodes.iterrows():
-        G.add_node(id, x=row["x"], y=row["y"])
+        G.add_node(id, orig_id=row["id"], x=row["x"], y=row["y"])
 
     # Add edges from the edges DataFrame
     for _, row in edges.iterrows():
-        G.add_edge(row['from_int'],
-                   row['to_int'],
-                   travel_time=row['weight'],
+        G.add_edge(row["from_int"],
+                   row["to_int"],
+                   travel_time=row["weight"],
                    length=row["distance"])
 
     # retain only the largest connected component if retain_all is False
@@ -147,7 +115,7 @@ def create_pdn_graph(nodes, edges):
     """
 
     # Remove edges with uknown nodes
-    edges = edges[edges['to_int'].isin(nodes.index) & edges['from_int'].isin(nodes.index)]
+    edges = edges[edges["to_int"].isin(nodes.index) & edges["from_int"].isin(nodes.index)]
     network = pdn.Network(nodes["x"],
                            nodes["y"],
                            edges["from_int"],
@@ -158,7 +126,7 @@ def create_pdn_graph(nodes, edges):
     return network
 
 
-def get_integrated_graph(gdf, graph_w, processed_path, gtfs_path):
+def get_integrated_graph(gdf, nodes, edges, processed_path, gtfs_path):
     """
     Retrieve or build an integrated multi-modal transportation network graph
     for a specified geographic area.
@@ -169,67 +137,66 @@ def get_integrated_graph(gdf, graph_w, processed_path, gtfs_path):
     - graph_w (ox.Graph): The walking network graph for the same area.
 
     Returns:
-    - urbanaccess_net (ua.network.ua_network): The integrated multi-modal
+    - ua_network (ua.network.ua_network): The integrated multi-modal
       transportation network.
     """
-    integrated_edges_path= f"{processed_path}/net_edges.feather"
-    integrated_nodes_path= f"{processed_path}/net_nodes.feather"
-    if os.path.exists(integrated_edges_path) and os.path.exists(integrated_nodes_path):
-        print("Loading integrated network")
-        urbanaccess_net = load_network(dir=processed_path)
-    else:
-        print("Building integrated network")
-        bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
-        nodes, edges = ox.graph_to_gdfs(graph_w)
-        nodes["id"]=nodes.index
+    print("Building integrated network")
+    bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
+    nodes["id"]=nodes.index
 
-        edges = edges.to_crs("epsg:32633")
-        edges["distance"] = edges["length"]
-        #edges["distance"] = edges.to_crs(2154).length
+    edges = edges.to_crs("epsg:32633")
+    edges["distance"] = edges["length"]
+    #edges["distance"] = edges.to_crs(2154).length
 
-        edges["from"]=edges.index.get_level_values(0)
-        edges["to"]=edges.index.get_level_values(1)
+    edges["from"]=edges.index.get_level_values(0)
+    edges["to"]=edges.index.get_level_values(1)
 
-        walking_speed_kph = 4.8
-        edges['weight'] = edges["distance"] / ((walking_speed_kph*1000)/60)
-        # assign node and edge net type
-        edges['net_type'] = "walk"
-        nodes['net_type'] = "walk"
-        ua_network.osm_nodes = nodes
-        ua_network.osm_edges = edges
+    walking_speed_kph = 4.8
+    edges["weight"] = edges["distance"] / ((walking_speed_kph*1000)/60)
+    # assign node and edge net type
+    edges["net_type"] = "walk"
+    nodes["net_type"] = "walk"
+    ua_network.osm_nodes = nodes
+    ua_network.osm_edges = edges
 
-        loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path,
-                                                   validation=True,
-                                                   verbose=True,
-                                                   bbox=bbox,
-                                                   remove_stops_outsidebbox=True,
-                                                   append_definitions=True)
-        #Simplify transit feeds
-        area = gdf.dissolve().to_crs(4326)
-        stops_inside_box = []
-        loaded_feeds.stops["geometry"] = gpd.points_from_xy(loaded_feeds.stops.stop_lon, loaded_feeds.stops.stop_lat)
-        print("Removing stops that are outside area")
-        for id, s in loaded_feeds.stops.iterrows():
-            if area.contains(s.geometry)[0]:
-                stops_inside_box.append(s.stop_id)
-        loaded_feeds.stops = loaded_feeds.stops[loaded_feeds.stops['stop_id'].
-                                                        isin(stops_inside_box)]
-        loaded_feeds.stop_times = loaded_feeds.stop_times[loaded_feeds.
-                                    stop_times['stop_id'].isin(stops_inside_box)]
+    loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path,
+                                               validation=True,
+                                               verbose=True,
+                                               bbox=bbox,
+                                               remove_stops_outsidebbox=True,
+                                               append_definitions=True)
+    #Simplify transit feeds
+    area = gdf.dissolve().to_crs(4326)
+    stops_inside_box = []
+    loaded_feeds.stops["geometry"] = gpd.points_from_xy(loaded_feeds.stops.stop_lon, loaded_feeds.stops.stop_lat)
+    print("Removing stops that are outside area")
+    for id, s in loaded_feeds.stops.iterrows():
+        if area.contains(s.geometry)[0]:
+            stops_inside_box.append(s.stop_id)
+    loaded_feeds.stops = loaded_feeds.stops[loaded_feeds.stops["stop_id"].
+                                                    isin(stops_inside_box)]
+    loaded_feeds.stop_times = loaded_feeds.stop_times[loaded_feeds.
+                                stop_times["stop_id"].isin(stops_inside_box)]
 
-        ua.gtfs.network.create_transit_net(gtfsfeeds_dfs=loaded_feeds,
-                                           day='monday',
-                                           timerange=['07:00:00', '10:00:00'],
-                                           calendar_dates_lookup=None)
-        ua.gtfs.headways.headways(gtfsfeeds_df=loaded_feeds,
-                                  headway_timerange=['07:00:00','10:00:00'])
-        urbanaccess_net = ua.network.ua_network
+    ua.gtfs.network.create_transit_net(gtfsfeeds_dfs=loaded_feeds,
+                                       day="monday",
+                                       timerange=["07:00:00", "10:00:00"],
+                                       calendar_dates_lookup=None)
+    ua.gtfs.headways.headways(gtfsfeeds_df=loaded_feeds,
+                              headway_timerange=["07:00:00","10:00:00"])
 
-        integrate_network(urbanaccess_network=urbanaccess_net,
-                                 headways=True,
-                                 urbanaccess_gtfsfeeds_df=loaded_feeds,
-                                 headway_statistic='mean')
-
-        urbanaccess_net.net_edges["weight"] *= 60 #to convert time in seconds
-        save_network(urbanaccess_network=urbanaccess_net, dir=processed_path)
-    return urbanaccess_net
+    integrate_network(urbanaccess_network=ua_network,
+                             headways=True,
+                             urbanaccess_gtfsfeeds_df=loaded_feeds,
+                             headway_statistic="mean")
+    ua_network.net_nodes = ua_network.net_nodes[["id", "x", "y"]]
+    ua_network.net_edges = ua_network.net_edges[["weight", "unique_trip_id",
+    "sequence", "unique_route_id", "net_type", "from", "to", "from_int", "to_int", "length",
+    "service", "distance", "mean"]]
+    ua_network.net_edges["weight"] *= 60 #to convert time in seconds
+    ua_network.net_edges["travel_time"] = ua_network.net_edges["weight"]
+    ua_network.net_edges["key"] = 0 #for consistancy with osmnx
+    ua_network.net_edges.set_index(["from", "to", "key"], drop=False, inplace=True)
+    duplicates = ua_network.net_edges.index.duplicated(keep='first')
+    ua_network.net_edges = ua_network.net_edges[~duplicates].set_index(["from", "to", "key"])
+    return ua_network.net_nodes, ua_network.net_edges

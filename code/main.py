@@ -49,17 +49,18 @@ if __name__ == "__main__":
 
     gdf = geo.get_gdf(data_path, processed_path, municipalities_file)
 
-    network_b = network.Network(gdf, "bike", processed_path, gtfs_path)
-    network_w = network.Network(gdf, "walk", processed_path, gtfs_path)
-    network_d = network.Network(gdf, "drive", processed_path)
-    network_t = network.Network(gdf, "transit", processed_path, gtfs_path)
-
     r1 = geo.random_point_in_area(gdf)
     r2 = geo.random_point_in_area(gdf)
+
+    network_t = network.Network(gdf, "transit", processed_path, gtfs_path)
+    print("transit: ", network_t.shortest_path(r1, r2))
+    network_d = network.Network(gdf, "drive", processed_path)
+    network_b = network.Network(gdf, "bike", processed_path, gtfs_path)
+    network_w = network.Network(gdf, "walk", processed_path, gtfs_path)
+
+    print("drive: ", network_d.shortest_path(r1, r2))
     print("bike: ", network_b.shortest_path(r1, r2))
     print("walk: ", network_w.shortest_path(r1, r2))
-    print("drive: ", network_d.shortest_path(r1, r2))
-    print("transit: ", network_t.shortest_path(r1, r2))
 
     embed()
 
