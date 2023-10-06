@@ -107,7 +107,7 @@ def create_nx_graph(nodes, edges, retain_all=False, bidirectional=False):
     return G
 
 
-def create_pdn_graph(nodes, edges):
+def create_pdn_graph(nodes, edges, impedence="weight"):
     """
     Create a hierarchical graph to greatly improve the shortest paths computations
     see: "A Generalized Computational Framework for Accessibility: From
@@ -120,28 +120,18 @@ def create_pdn_graph(nodes, edges):
                            nodes["y"],
                            edges["from_int"],
                            edges["to_int"],
-                           edges[["weight"]],
+                           edges[[impedence]],
                            twoway=False)
     network.precompute(3000)
     return network
 
 
-def get_integrated_graph(gdf, nodes, edges, processed_path, gtfs_path):
+def get_integrated_graph(area, nodes, edges, processed_path, gtfs_path):
     """
     Retrieve or build an integrated multi-modal transportation network graph
     for a specified geographic area.
-
-    Parameters:
-    - gdf (geopandas.GeoDataFrame): The GeoDataFrame representing the geographic
-      area of interest.
-    - graph_w (ox.Graph): The walking network graph for the same area.
-
-    Returns:
-    - ua_network (ua.network.ua_network): The integrated multi-modal
-      transportation network.
     """
     print("Building integrated network")
-    bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
     nodes["id"]=nodes.index
 
     edges = edges.to_crs("epsg:32633")
@@ -162,16 +152,15 @@ def get_integrated_graph(gdf, nodes, edges, processed_path, gtfs_path):
     loaded_feeds = ua.gtfs.load.gtfsfeed_to_df(gtfs_path,
                                                validation=True,
                                                verbose=True,
-                                               bbox=bbox,
+                                               bbox=area.bbox,
                                                remove_stops_outsidebbox=True,
                                                append_definitions=True)
     #Simplify transit feeds
-    area = gdf.dissolve().to_crs(4326)
     stops_inside_box = []
     loaded_feeds.stops["geometry"] = gpd.points_from_xy(loaded_feeds.stops.stop_lon, loaded_feeds.stops.stop_lat)
     print("Removing stops that are outside area")
     for id, s in loaded_feeds.stops.iterrows():
-        if area.contains(s.geometry)[0]:
+        if area.polygon.contains(s.geometry):
             stops_inside_box.append(s.stop_id)
     loaded_feeds.stops = loaded_feeds.stops[loaded_feeds.stops["stop_id"].
                                                     isin(stops_inside_box)]

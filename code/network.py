@@ -2,24 +2,22 @@ import osmnx as ox
 import pandas as pd
 import numpy as np
 import os
-from graph_utils import create_nx_graph, create_pdn_graph, get_integrated_graph, load_graph, save_graph
-import networkx as nx
+from graph_utils import create_pdn_graph, get_integrated_graph, load_graph, save_graph
 from IPython import embed
 
 class Network():
 
-    def __init__(self, gdf, mode, processed_path, gtfs_path=None):
+    def __init__(self, area, mode, processed_path, gtfs_path=None):
         if mode == "transit" and gtfs_path == None:
             raise Exception("No gtfs provided when mode is set to transit")
         self.processed_path = processed_path
-        self.gdf = gdf
+        self.area = area
         self.mode = mode
         self.gtfs_path = gtfs_path
         self.create_network()
 
 
     def create_network(self):
-        area = self.gdf.dissolve().to_crs(4326)
         path = f"{self.processed_path}/{self.mode}.pkl"
         if os.path.exists(path):
             print(f"Loading {self.mode} network")
@@ -32,12 +30,12 @@ class Network():
                     nodes, edges = load_graph(graph_w_path)
                 else:
                     print("Downloading walk network")
-                    graph = ox.graph_from_polygon(area.geometry[0], network_type="walk")
+                    graph = ox.graph_from_polygon(self.area.polygon, network_type="walk")
                     nodes, edges = ox.graph_to_gdfs(graph)
-                nodes, edges = get_integrated_graph(self.gdf, nodes, edges, self.processed_path, self.gtfs_path)
+                nodes, edges = get_integrated_graph(self.area, nodes, edges, self.processed_path, self.gtfs_path)
             else:
                 print(f"Downloading {self.mode} network")
-                graph = ox.graph_from_polygon(area.geometry[0], network_type=self.mode)
+                graph = ox.graph_from_polygon(self.area.polygon, network_type=self.mode)
                 if self.mode=="drive":
                     graph = ox.add_edge_speeds(graph)
                     graph = ox.add_edge_travel_times(graph)
@@ -94,26 +92,27 @@ class Network():
         """
         travel_time = 0
         distance = 0
-
-        if not route:
+        if route==[]:
             return None, None
         for i in range(len(route)-1):
             data = self.edges.loc[route[i], route[i+1], 0]
             travel_time += data["travel_time"]
             if not np.isnan(data["length"]): #tt travels have nan distances
                 distance += data["length"]
-        return travel_time, distance
+        return {"travel_time":travel_time, "distance":distance}
 
 
-    """
-    def get_matrices(graph, grid):
-        tt_matrix = []
-        d_matrix = []
-        for i, j in product(grid.index, grid.index):
-            route = ox.shortest_path(graph, grid.id.iloc[i], grid.id.iloc[j],
-                                 weight='travel_time', cpus=None)
-            tt, d = get_route_details(graph, route)
-            tt_matrix.append({"from_id": grid.id[i], "to_id": grid.id[j], "travel_time": tt})
-            d_matrix.append({"from_id": grid.id[i], "to_id": grid.id[j], "distance": d})
-        return pd.DataFrame(tt_matrix), pd.DataFrame(d_matrix)
-    """
+    def get_matrices(self, pois, distance=False):
+        pois_nodes = self.pdn.get_node_ids(pois.lon, pois.lat)
+        origs = [o for o in pois_nodes.values for d in pois_nodes.values]
+        dests = [d for o in pois_nodes.values for d in pois_nodes.values]
+        # this vectorized version of the shortest path computation is way more efficient than calling multiple times shortest_path_length
+        times = self.pdn.shortest_path_lengths(origs, dests)
+        a = np.array(times).reshape((260, 260))
+        m_t = pd.DataFrame(a, index=pois.index, columns=pois.index)
+        if distance:
+            pdn = create_pdn_graph(self.nodes, self.edges, impedence="length")
+            distances = pdn.shortest_path_lengths(origs, dests)
+            a = np.array(distances).reshape((260, 260))
+            m_d = pd.DataFrame(a, index=pois.index, columns=pois.index)
+        return {"time": m_t, "distance": m_d}

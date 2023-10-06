@@ -6,7 +6,7 @@ import sys
 import yaml
 import matplotlib
 from matplotlib import pyplot as plt
-import geo
+import area
 import network
 
 """
@@ -47,36 +47,27 @@ if __name__ == "__main__":
     if not os.path.isdir(processed_path):
         os.mkdir(processed_path)
 
-    gdf = geo.get_gdf(data_path, processed_path, municipalities_file)
+    area = area.Area(data_path, processed_path, municipalities_file)
 
-    r1 = geo.random_point_in_area(gdf)
-    r2 = geo.random_point_in_area(gdf)
+    r1 = area.random_point()
+    r2 = area.random_point()
 
-    network_t = network.Network(gdf, "transit", processed_path, gtfs_path)
-    print("transit: ", network_t.shortest_path(r1, r2))
-    network_d = network.Network(gdf, "drive", processed_path)
-    network_b = network.Network(gdf, "bike", processed_path, gtfs_path)
-    network_w = network.Network(gdf, "walk", processed_path, gtfs_path)
+    network_d = network.Network(area, "drive", processed_path)
+    network_w = network.Network(area, "walk", processed_path, gtfs_path)
+    network_t = network.Network(area, "transit", processed_path, gtfs_path)
+    network_b = network.Network(area, "bike", processed_path, gtfs_path)
 
     print("drive: ", network_d.shortest_path(r1, r2))
+    print("transit: ", network_t.shortest_path(r1, r2))
     print("bike: ", network_b.shortest_path(r1, r2))
     print("walk: ", network_w.shortest_path(r1, r2))
 
-    embed()
-
+    #find distance matrix between all restaurants to all restaurant by car
+    restaurants = area.find_POIs('"amenity"="restaurant"')
+    matrices = network_d.get_matrices(restaurants, distance=True)
+    print(matrices["time"], matrices["distance"])
 
     """
-    #find distance matrix between all restaurants to all restaurant
-    bbox = tuple(gdf.dissolve().to_crs(4326).bounds.iloc[0])
-    restaurants = osm.node_query(bbox[1], bbox[0], bbox[3], bbox[2],
-                                 tags='"amenity"="restaurant"')
-    restaurant_nodes = network.get_node_ids(restaurants.lon, restaurants.lat)
-    origs = [o for o in restaurant_nodes.values for d in restaurant_nodes.values]
-    dests = [d for o in restaurant_nodes.values for d in restaurant_nodes.values]
-    # this vectorized version of the shortest path computation is way more efficient
-    distances = network.shortest_path_lengths(origs, dests)
-    print(distances)
-
     #find the closest restaurants to each node
     network.set_pois(category = 'restaurants',
                      maxdist = 1000,
