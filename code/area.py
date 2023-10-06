@@ -143,7 +143,7 @@ class Area():
 
         return random_point.x, random_point.y
 
-    def find_POIs(self, tags):
+    def find_pois(self, tags):
         """
         return list of points of interest in the area with osm tags (ex:'"amenity"="restaurant"')
         """

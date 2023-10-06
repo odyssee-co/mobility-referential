@@ -4,8 +4,6 @@ import os
 os.environ['USE_PYGEOS'] = '0'
 import sys
 import yaml
-import matplotlib
-from matplotlib import pyplot as plt
 import area
 import network
 
@@ -39,7 +37,6 @@ if __name__ == "__main__":
     data_path = cfg["data_path"]
     municipalities_file = cfg["municipalities_file"]
     gtfs_path = cfg["gtfs_path"]
-    grid_size = cfg["grid_size"]
 
     #Create the processed data directory
     processed_path = f"{data_path}/processed/{municipalities_file.split('.')[0]}"
@@ -49,46 +46,29 @@ if __name__ == "__main__":
 
     area = area.Area(data_path, processed_path, municipalities_file)
 
-    r1 = area.random_point()
-    r2 = area.random_point()
-
     network_d = network.Network(area, "drive", processed_path)
+
+    """
     network_w = network.Network(area, "walk", processed_path, gtfs_path)
     network_t = network.Network(area, "transit", processed_path, gtfs_path)
     network_b = network.Network(area, "bike", processed_path, gtfs_path)
 
+    r1 = area.random_point()
+    r2 = area.random_point()
     print("drive: ", network_d.shortest_path(r1, r2))
     print("transit: ", network_t.shortest_path(r1, r2))
     print("bike: ", network_b.shortest_path(r1, r2))
     print("walk: ", network_w.shortest_path(r1, r2))
+    """
 
-    #find distance matrix between all restaurants to all restaurant by car
-    restaurants = area.find_POIs('"amenity"="restaurant"')
+    #find time and distance matrices between all restaurants to all restaurant by car
+    restaurants = area.find_pois('"amenity"="restaurant"')
     matrices = network_d.get_matrices(restaurants, distance=True)
     print(matrices["time"], matrices["distance"])
 
-    """
-    #find the closest restaurants to each node
-    network.set_pois(category = 'restaurants',
-                     maxdist = 1000,
-                     maxitems = 3,
-                     x_col = restaurants.lon,
-                     y_col = restaurants.lat)
-    results = network.nearest_pois(distance = 1000,
-                                   category = 'restaurants',
-                                   num_pois = 3,
-                                   include_poi_ids = True)
-    print(results.head())
+    #find the 3 closest restaurants at a maximum of 10 minutes to each node
+    closest = network_d.find_closest(restaurants, maxtime=600, maxitems=3)
+    print(closest.head())
 
-    #how many restaurants are within 20min meters of each node?
-    network.set(restaurant_nodes, name = 'restaurants')
-    accessibility = network.aggregate(distance = 20, type = 'count', name = 'restaurants')
-    accessibility.describe()
-    fig, ax = plt.subplots(figsize=(10,8))
-    plt.title('Restaurants within 20min transportation')
-    plt.scatter(network.nodes_df.x, network.nodes_df.y,
-                c=accessibility, s=1, cmap='YlOrRd',
-                norm=matplotlib.colors.LogNorm())
-    cb = plt.colorbar()
-    plt.show()
-    """
+    #plot a map showing how many restaurants are within 5min of each node
+    network_d.plot_accessibility(restaurants, time=300)

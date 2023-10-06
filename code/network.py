@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import os
 from graph_utils import create_pdn_graph, get_integrated_graph, load_graph, save_graph
+import matplotlib
+from matplotlib import pyplot as plt
 from IPython import embed
 
 class Network():
@@ -116,3 +118,31 @@ class Network():
             a = np.array(distances).reshape((260, 260))
             m_d = pd.DataFrame(a, index=pois.index, columns=pois.index)
         return {"time": m_t, "distance": m_d}
+
+    def find_closest(self, pois, maxtime=600, maxitems=None):
+        #find the closest pois to each node
+        self.pdn.set_pois(category = 'pois',
+                          maxdist = maxtime,
+                          maxitems = maxitems,
+                          x_col = pois.lon,
+                          y_col = pois.lat)
+        results = self.pdn.nearest_pois(distance = maxtime,
+                                       category = 'pois',
+                                       num_pois = maxitems,
+                                       include_poi_ids = True)
+        return results
+
+
+    def plot_accessibility(self, pois, time=300):
+        #how many pois are within time seconds of each node?
+        pois_nodes = self.pdn.get_node_ids(pois.lon, pois.lat)
+        self.pdn.set(pois_nodes, name = 'pois')
+        accessibility = self.pdn.aggregate(time, type = 'count', name = 'pois')
+        accessibility.describe()
+        fig, ax = plt.subplots(figsize=(10,8))
+        plt.title(f'Restaurants within {time/60}min by {self.mode}')
+        plt.scatter(self.pdn.nodes_df.x, self.pdn.nodes_df.y,
+                    c=accessibility, s=1, cmap='YlOrRd',
+                    norm=matplotlib.colors.LogNorm())
+        cb = plt.colorbar()
+        plt.show()
