@@ -6,6 +6,7 @@ import sys
 import yaml
 import area
 import network
+import vrp
 
 """
 #parameters to set all_oneway to true but it's buggy
@@ -59,7 +60,6 @@ if __name__ == "__main__":
     print("transit: ", network_t.shortest_path(r1, r2))
     print("bike: ", network_b.shortest_path(r1, r2))
     print("walk: ", network_w.shortest_path(r1, r2))
-    """
 
     #find time and distance matrices between all restaurants to all restaurant by car
     restaurants = area.find_pois('"amenity"="restaurant"')
@@ -72,3 +72,10 @@ if __name__ == "__main__":
 
     #plot a map showing how many restaurants are within 5min of each node
     network_d.plot_accessibility(restaurants, time=300)
+    """
+
+    jobs = area.random_points(15)
+    vehicles = area.random_points(4)
+    solution = vrp.solve_vrp(network_d, vehicles, jobs)
+    print(solution.summary.cost)
+    print(solution.routes[["vehicle_id", "type", "arrival", "location_index", "id"]])

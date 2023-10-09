@@ -5,6 +5,7 @@ import os
 from graph_utils import create_pdn_graph, get_integrated_graph, load_graph, save_graph
 import matplotlib
 from matplotlib import pyplot as plt
+import math
 from IPython import embed
 
 class Network():
@@ -104,19 +105,19 @@ class Network():
         return {"travel_time":travel_time, "distance":distance}
 
 
-    def get_matrices(self, pois, distance=False):
+    def get_matrices(self, pois):
         pois_nodes = self.pdn.get_node_ids(pois.lon, pois.lat)
         origs = [o for o in pois_nodes.values for d in pois_nodes.values]
         dests = [d for o in pois_nodes.values for d in pois_nodes.values]
         # this vectorized version of the shortest path computation is way more efficient than calling multiple times shortest_path_length
         times = self.pdn.shortest_path_lengths(origs, dests)
-        a = np.array(times).reshape((260, 260))
+        n = int(math.sqrt(len(times)))
+        a = np.array(times).reshape((n, n))
         m_t = pd.DataFrame(a, index=pois.index, columns=pois.index)
-        if distance:
-            pdn = create_pdn_graph(self.nodes, self.edges, impedence="length")
-            distances = pdn.shortest_path_lengths(origs, dests)
-            a = np.array(distances).reshape((260, 260))
-            m_d = pd.DataFrame(a, index=pois.index, columns=pois.index)
+        pdn = create_pdn_graph(self.nodes, self.edges, impedence="length")
+        distances = pdn.shortest_path_lengths(origs, dests)
+        a = np.array(distances).reshape((n, n))
+        m_d = pd.DataFrame(a, index=pois.index, columns=pois.index)
         return {"time": m_t, "distance": m_d}
 
     def find_closest(self, pois, maxtime=600, maxitems=None):

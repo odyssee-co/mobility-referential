@@ -9,6 +9,7 @@ from shapely.ops import nearest_points
 import random
 from pandana.loaders import osm
 from IPython import embed
+import pandas as pd
 
 class Area():
 
@@ -141,7 +142,16 @@ class Area():
         while not polygon.contains(random_point):
             random_point = Point(random.uniform(min_x, max_x), random.uniform(min_y, max_y))
 
-        return random_point.x, random_point.y
+        return (random_point.x, random_point.y)
+
+
+    def random_points(self, n):
+            points = []
+            for i in range(n):
+                x, y = self.random_point()
+                points.append({"lat": y, "lon": x})
+            return pd.DataFrame(points)
+
 
     def find_pois(self, tags):
         """
