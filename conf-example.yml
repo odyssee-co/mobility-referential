@@ -1,0 +1,3 @@
+data_path : /home/user/mobility-referential/data
+municipalities_file: plaine-commune.txt
+gtfs_path: /home/user/mobility-referential/data/IDFM-gtfs
