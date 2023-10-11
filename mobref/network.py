@@ -2,11 +2,11 @@ import osmnx as ox
 import pandas as pd
 import numpy as np
 import os
-from graph_utils import create_pdn_graph, get_integrated_graph, load_graph, save_graph
+from mobref.graph_utils import create_pdn_graph, get_integrated_graph, load_graph, save_graph
 import matplotlib
 from matplotlib import pyplot as plt
 import math
-from IPython import embed
+import urbanaccess as ua
 
 class Network():
 
@@ -23,7 +23,7 @@ class Network():
     def create_network(self):
         path = f"{self.processed_path}/{self.mode}.pkl"
         if os.path.exists(path):
-            print(f"Loading {self.mode} network")
+            print(f"Loading {self.mode} network...")
             nodes, edges = load_graph(path)
         else:
             #cf = '["highway"~"motorway|trunk|primary|secondary"]'
@@ -32,12 +32,12 @@ class Network():
                 if os.path.exists(graph_w_path):
                     nodes, edges = load_graph(graph_w_path)
                 else:
-                    print("Downloading walk network")
+                    print("Downloading walk network...")
                     graph = ox.graph_from_polygon(self.area.polygon, network_type="walk")
                     nodes, edges = ox.graph_to_gdfs(graph)
                 nodes, edges = get_integrated_graph(self.area, nodes, edges, self.processed_path, self.gtfs_path)
             else:
-                print(f"Downloading {self.mode} network")
+                print(f"Downloading {self.mode} network...")
                 graph = ox.graph_from_polygon(self.area.polygon, network_type=self.mode)
                 if self.mode=="drive":
                     graph = ox.add_edge_speeds(graph)
@@ -59,7 +59,7 @@ class Network():
         self.pdn = create_pdn_graph(nodes, edges)
         self.nodes = nodes
         self.edges= edges
-
+        print() #cleaner stdout
 
     def convert_path_to_osmid(self, path):
         path_osmid = []
@@ -74,10 +74,10 @@ class Network():
         shortest_path = self.pdn.shortest_path(nodes_ids[0], nodes_ids[1])
         if self.mode == "transit":
             shortest_path = self.convert_path_to_osmid(shortest_path)
-        travel_time, distance = self.get_route_details(list(shortest_path))
+        route_details = self.get_route_details(list(shortest_path))
         res = { "shortest_path": shortest_path,
-                "travel_time"  : travel_time,
-                "distance"     : distance}
+                "travel_time"  : route_details["travel_time"],
+                "distance"     : route_details["distance"]}
         return res
 
 
@@ -147,3 +147,13 @@ class Network():
                     norm=matplotlib.colors.LogNorm())
         cb = plt.colorbar()
         plt.show()
+
+
+    def plot_net_by_travel_time(self):
+        edgecolor = ua.plot.col_colors(df=self.edges, col='weight', cmap='gist_heat_r', num_bins=5)
+        ua.plot.plot_net(nodes=self.nodes,
+                         edges=self.edges,
+                         bbox=self.area.bbox,
+                         fig_height=30, margin=0.02,
+                         edge_color=edgecolor, edge_linewidth=1, edge_alpha=0.7,
+                         node_color='black', node_size=0, node_alpha=1, node_edgecolor='none', node_zorder=3, nodes_only=False)

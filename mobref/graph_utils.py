@@ -5,9 +5,8 @@ import osmnx as ox
 import pandana as pdn
 import urbanaccess as ua
 from urbanaccess.network import ua_network
-from patched_ua import integrate_network
+from mobref.patched_ua import integrate_network
 import pickle
-from IPython import embed
 
 # Convert the .osm file to .osm.pbf format using osmium
 class OSMToPBFHandler(osmium.SimpleHandler):

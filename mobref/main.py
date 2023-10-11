@@ -1,12 +1,9 @@
-#from IPython import embed; embed()
 from IPython import embed
 import os
 os.environ['USE_PYGEOS'] = '0'
 import sys
 import yaml
-import area
-import network
-import vrp
+from mobref import area, network, vrp
 
 """
 #parameters to set all_oneway to true but it's buggy
@@ -23,10 +20,6 @@ ox.settings.useful_tags_node = utn
 ox.settings.useful_tags_way = utw
 """
 
-
-def get_matrices(network, POIs):
-    #
-    return
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -48,34 +41,41 @@ if __name__ == "__main__":
     area = area.Area(data_path, processed_path, municipalities_file)
 
     network_d = network.Network(area, "drive", processed_path)
-
-    """
     network_w = network.Network(area, "walk", processed_path, gtfs_path)
     network_t = network.Network(area, "transit", processed_path, gtfs_path)
     network_b = network.Network(area, "bike", processed_path, gtfs_path)
 
+    print("Print shortest path between two random points for available modes.")
     r1 = area.random_point()
     r2 = area.random_point()
-    print("drive: ", network_d.shortest_path(r1, r2))
-    print("transit: ", network_t.shortest_path(r1, r2))
-    print("bike: ", network_b.shortest_path(r1, r2))
-    print("walk: ", network_w.shortest_path(r1, r2))
+    print("drive: ", network_d.shortest_path(r1, r2), "\n")
+    print("transit: ", network_t.shortest_path(r1, r2), "\n")
+    print("bike: ", network_b.shortest_path(r1, r2), "\n")
+    print("walk: ", network_w.shortest_path(r1, r2), "\n")
 
-    #find time and distance matrices between all restaurants to all restaurant by car
+    print("Find time and distance matrices between all restaurants to all restaurants by car.")
     restaurants = area.find_pois('"amenity"="restaurant"')
-    matrices = network_d.get_matrices(restaurants, distance=True)
+    matrices = network_t.get_matrices(restaurants)
     print(matrices["time"], matrices["distance"])
+    print()
 
-    #find the 3 closest restaurants at a maximum of 10 minutes to each node
-    closest = network_d.find_closest(restaurants, maxtime=600, maxitems=3)
+    print("Find the 3 closest restaurants at a maximum of 10 minutes to each node.")
+    closest = network_t.find_closest(restaurants, maxtime=600, maxitems=3)
     print(closest.head())
+    print()
 
-    #plot a map showing how many restaurants are within 5min of each node
-    network_d.plot_accessibility(restaurants, time=300)
-    """
+    print("Plot accessibility...\n")
+    network_t.plot_accessibility(restaurants, time=300)
+    print("Plot transit network...\n")
+    network_t.plot_net_by_travel_time()
 
+    print("Showcasing vrp problem with random jobs and vehicles.")
     jobs = area.random_points(15)
+    print("Jobs: ", jobs)
     vehicles = area.random_points(4)
+    print("Vehicles: ", vehicles)
     solution = vrp.solve_vrp(network_d, vehicles, jobs)
     print(solution.summary.cost)
     print(solution.routes[["vehicle_id", "type", "arrival", "location_index", "id"]])
+
+    embed()

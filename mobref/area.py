@@ -8,7 +8,6 @@ from matplotlib import pyplot as plt
 from shapely.ops import nearest_points
 import random
 from pandana.loaders import osm
-from IPython import embed
 import pandas as pd
 
 class Area():
@@ -42,6 +41,7 @@ class Area():
             gdf = gdf[gdf["commune_id"].isin(muni)]
             gdf.reset_index(drop=True).to_feather(area_path)
         self.gdf = gdf
+        print() #cleaner stdout
 
     def make_grid(self, grid_size):
         """
