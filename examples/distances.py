@@ -11,17 +11,18 @@ if __name__ == "__main__":
     yml_path = sys.argv[1]
     with open(yml_path, "r") as yml_file:
         cfg = yaml.safe_load(yml_file)
-    data_path = cfg["data_path"]
-    municipalities_file = cfg["municipalities_file"]
-    gtfs_path = cfg["gtfs_path"]
 
-    #Create the processed data directory
-    processed_path = f"{data_path}/processed/{municipalities_file.split('.')[0]}"
+    municipalities_path = cfg["municipalities_path"]
+    administrative_cutting_path = cfg["administrative_cutting_path"]
+
+    #Create the processed data directory if needed
+    processed_path = cfg["processed_path"]
     if not os.path.isdir(processed_path):
         os.mkdir(processed_path)
 
-    area = area.Area(data_path, processed_path, municipalities_file)
+    area = area.Area(processed_path, municipalities_path, administrative_cutting_path)
 
+    gtfs_path = cfg["gtfs_path"]
     network_d = network.Network(area, "drive", processed_path)
     network_w = network.Network(area, "walk", processed_path, gtfs_path)
     network_t = network.Network(area, "transit", processed_path, gtfs_path)

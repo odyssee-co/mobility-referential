@@ -12,10 +12,10 @@ import pandas as pd
 
 class Area():
 
-    def __init__(self, data_path, processed_path, municipalities_file):
-        self.data_path = data_path
+    def __init__(self, processed_path, municipalities_path, administrative_cutting_path):
         self.processed_path = processed_path
-        self.municipalities_file = municipalities_file
+        self.municipalities_path = municipalities_path
+        self.administrative_cutting_path = administrative_cutting_path
         self.make_gdf()
         self.bbox = tuple(self.gdf.dissolve().to_crs(4326).bounds.iloc[0])
         self.polygon = self.gdf.dissolve().to_crs(4326).geometry[0]
@@ -35,10 +35,9 @@ class Area():
             gdf = gpd.read_feather(area_path)
         else:
             print("Processing area...")
-            muni = open(f"{self.data_path}/{self.municipalities_file}").read().split("\n")
-            #gdf = gpd.read_file(f"{data_path}/communes.gpkg").to_crs(2154)
-            gdf = gpd.read_file(f"{self.data_path}/communes.gpkg").to_crs(4326)
-            gdf = gdf[gdf["commune_id"].isin(muni)]
+            muni = open(self.municipalities_path).read().split("\n")
+            gdf = gpd.read_file(self.administrative_cutting_path).to_crs(4326)
+            gdf = gdf[gdf["insee"].isin(muni)]
             gdf.reset_index(drop=True).to_feather(area_path)
         self.gdf = gdf
         print() #cleaner stdout

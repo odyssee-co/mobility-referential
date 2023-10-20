@@ -139,18 +139,17 @@ class Network():
         pois_nodes = self.pdn.get_node_ids(pois.lon, pois.lat)
         self.pdn.set(pois_nodes, name = 'pois')
         accessibility = self.pdn.aggregate(time, type = 'count', name = 'pois')
-        accessibility.describe()
         fig, ax = plt.subplots(figsize=(10,8))
         plt.title(f'Restaurants within {time/60}min by {self.mode}')
         plt.scatter(self.pdn.nodes_df.x, self.pdn.nodes_df.y,
-                    c=accessibility, s=1, cmap='YlOrRd',
+                    c=accessibility, s=1, cmap='YlOrBr',
                     norm=matplotlib.colors.LogNorm())
         cb = plt.colorbar()
         plt.show()
 
 
     def plot_net_by_travel_time(self):
-        edgecolor = ua.plot.col_colors(df=self.edges, col='weight', cmap='gist_heat_r', num_bins=5)
+        edgecolor = ua.plot.col_colors(df=self.edges, col='weight', cmap='Blues', num_bins=5)
         ua.plot.plot_net(nodes=self.nodes,
                          edges=self.edges,
                          bbox=self.area.bbox,

@@ -1,3 +1,4 @@
-data_path : /home/user/mobility-referential/data
-municipalities_file: plaine-commune.txt
+municipalities_path: /home/user/mobility-referential/data/plaine-commune.txt #file listing all the INSEE code of the municipalities (one per line) you wish to include into the analysis
+administrative_cutting_path: /home/user/mobility-referential/data/communes-20220101-shp/communes-20220101.shp
 gtfs_path: /home/user/mobility-referential/data/IDFM-gtfs
+processed_path: /home/user/mobility-referential/data/processed/plaineco
