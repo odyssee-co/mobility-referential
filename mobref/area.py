@@ -13,6 +13,14 @@ import pandas as pd
 class Area():
 
     def __init__(self, processed_path, municipalities_path, administrative_cutting_path):
+        """
+        Initializes an Area object with geographic data.
+
+        Args:
+        processed_path (str): Path to processed data.
+        municipalities_path (str): Path to municipalities data.
+        administrative_cutting_path (str): Path to administrative cutting.
+        """
         self.processed_path = processed_path
         self.municipalities_path = municipalities_path
         self.administrative_cutting_path = administrative_cutting_path
@@ -22,12 +30,13 @@ class Area():
 
     def make_gdf(self):
         """
-        Load or process a GeoDataFrame (gdf) representing a specific geographic zone
-        by filtering it based on a list of municipality IDs read from a file.
-        The resulting GeoDataFrame is then saved as a Feather file for future use and returned.
+        Load or process geographical data and store it in a GeoDataFrame (gdf).
 
-        Returns:
-        - gdf (geopandas.GeoDataFrame): A GeoDataFrame representing the geographic area.
+        This function first checks if the processed area data file exists. If it does, it loads
+        the data into a GeoDataFrame. If not, it processes the area data from the specified
+        municipalities file and administrative cutting path, filters the data based on
+        'insee' values, and saves the processed data to a feather file. The resulting GeoDataFrame
+        is stored in the instance variable `self.gdf`.
         """
         area_path = f"{self.processed_path}/area.feather"
         if os.path.exists(area_path):
@@ -44,13 +53,10 @@ class Area():
 
     def make_grid(self, grid_size):
         """
-        Compute a grid that uniformly covers the shape of the input GeoDataFrame (gdf).
+        Create a grid of points within the bounding box of the given GeoDataFrame.
 
-        Parameters:
-        - gdf (geopandas.GeoDataFrame): The input GeoDataFrame representing a geographic area.
-
-        Returns:
-        - grid (geopandas.GeoDataFrame): A GeoDataFrame representing the computed grid.
+        Args:
+        grid_size (float): Size of the grid
         """
 
         grid_path = f"{self.processed_path}/grid.feather"
@@ -100,15 +106,17 @@ class Area():
 
     def get_grid_id(self, x, y):
         """
-        Return the nearest grid centroid ID from the given x and y coordinates of a point.
+        Get the ID of the grid cell closest to the specified coordinates (x, y).
 
-        Parameters:
-        - grid (geopandas.GeoDataFrame): The GeoDataFrame representing the grid centroids.
-        - x (float): The x-coordinate (longitude) of the point.
-        - y (float): The y-coordinate (latitude) of the point.
+        Args:
+        x (float): X-coordinate of the point.
+        y (float): Y-coordinate of the point.
 
         Returns:
-        - int: The ID of the nearest grid centroid to the provided coordinates (x, y).
+        int: ID of the grid cell
+
+        Raises:
+        Exception: If no grid has been set.
         """
         grid = self.grid
         if not grid:
@@ -121,15 +129,10 @@ class Area():
 
     def random_point(self):
         """
-        This function generates a random point within a given polygon. It ensures that the generated point is located
-        inside the specified polygon by repeatedly generating points within the bounding box of the polygon until
-        a point inside the polygon is found.
-
-        Parameters:
-            polygon (shapely.geometry.Polygon): The polygon within which to generate the random point.
+        Generate a random point within the bounding area defined by the GeoDataFrame.
 
         Returns:
-            tuple: A tuple containing the x and y coordinates of the generated random point.
+        tuple: A tuple containing the X and Y coordinates of the randomly generated point.
         """
         polygon = self.gdf.dissolve().to_crs(4326).geometry[0]
         min_x, min_y, max_x, max_y = polygon.bounds
@@ -145,16 +148,31 @@ class Area():
 
 
     def random_points(self, n):
-            points = []
-            for i in range(n):
-                x, y = self.random_point()
-                points.append({"lat": y, "lon": x})
-            return pd.DataFrame(points)
+        """
+        Generate a DataFrame of n random points within the bounding area defined by the GeoDataFrame.
+
+        Args:
+        n (int): Number of random points to generate.
+
+        Returns:
+        pandas.DataFrame: DataFrame containing 'n' random points with columns 'lat' and 'lon'.
+        """
+        points = []
+        for i in range(n):
+            x, y = self.random_point()
+            points.append({"lat": y, "lon": x})
+        return pd.DataFrame(points)
 
 
     def find_pois(self, tags):
         """
-        return list of points of interest in the area with osm tags (ex:'"amenity"="restaurant"')
+        Find points of interest within the area based on specified OSM tags.
+
+        Args:
+        tags (str): OSM tags in the format '"key"="value"', for example, '"amenity"="restaurant"'.
+
+        Returns:
+        gpd.GeoDataFrame: GeoDataFrame containing points of interest within the specified area.
         """
         bbox = self.bbox
         pois = osm.node_query(bbox[1], bbox[0], bbox[3], bbox[2],tags)

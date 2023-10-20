@@ -45,6 +45,17 @@ def osm_to_pbf(graph_input, graph_output):
 
 
 def save_graph(nodes, edges, path):
+    """
+        Save graph nodes and edges as a dictionary and store it in a binary file.
+
+    Args:
+        nodes (pandas.DataFrame): DataFrame containing node information.
+        edges (pandas.DataFrame): DataFrame containing edge information.
+        path (str): Path to the file where the graph will be saved.
+
+    Raises:
+        ValueError: If either the 'nodes' or 'edges' DataFrame is empty.
+    """
     if edges.empty or nodes.empty:
         raise ValueError("Net_edges or net_nodes are empty.")
     nodes = gpd.GeoDataFrame(nodes)
@@ -55,6 +66,15 @@ def save_graph(nodes, edges, path):
 
 
 def load_graph(path):
+    """
+    Load graph nodes and edges from a binary file.
+
+    Args:
+        path (str): Path to the file containing the saved graph.
+
+    Returns:
+        pandas.DataFrame, pandas.DataFrame: Loaded nodes and edges DataFrames.
+    """
     with open(path, "rb") as file:
         graph = pickle.load(file)
     nodes = graph["nodes"]
@@ -62,24 +82,19 @@ def load_graph(path):
     return nodes, edges
 
 
-"""
-def save_graph(nodes, edges, dir, name):
-    if edges.empty or nodes.empty:
-        raise ValueError("Net_edges or net_nodes are empty.")
-    nodes = gpd.GeoDataFrame(nodes)
-    nodes.reset_index(drop=True).to_feather(f"{dir}/{name}_nodes.feather")
-    edges = gpd.GeoDataFrame(edges)
-    edges.reset_index(drop=True).to_feather(f"{dir}/{name}_edges.feather")
-
-
-def load_graph(dir, name):
-    nodes = pd.read_feather(f"{dir}/{name}_nodes.feather")
-    edges = pd.read_feather(f"{dir}/{name}_edges.feather")
-    return nodes, edges
-"""
-
-
 def create_nx_graph(nodes, edges, retain_all=False, bidirectional=False):
+    """
+    Create a NetworkX graph from nodes and edges DataFrames.
+
+    Args:
+        nodes (pandas.DataFrame): DataFrame containing node information.
+        edges (pandas.DataFrame): DataFrame containing edge information.
+        retain_all (bool, optional): If True, retain all nodes even if not connected. Default is False.
+        bidirectional (bool, optional): If True, create a bidirectional graph. Default is False.
+
+    Returns:
+        networkx.MultiDiGraph: NetworkX graph created from the nodes and edges DataFrames.
+    """
     metadata = {
         "crs": "EPSG:4326"
     }
@@ -108,9 +123,18 @@ def create_nx_graph(nodes, edges, retain_all=False, bidirectional=False):
 
 def create_pdn_graph(nodes, edges, impedence="weight"):
     """
-    Create a hierarchical graph to greatly improve the shortest paths computations
+
+    Create a hierarchical graph for efficient shortest paths computations
     see: "A Generalized Computational Framework for Accessibility: From
     the Pedestrian to the Metropolitan Scale" for more details
+
+    Args:
+        nodes (pandas.DataFrame): DataFrame containing node information.
+        edges (pandas.DataFrame): DataFrame containing edge information.
+        impedance (str, optional): Edge attribute representing impedance for path calculations. Default is "weight".
+
+    Returns:
+        pdn.Network: pandana graph created from nodes and edges DataFrames.
     """
 
     # Remove edges with uknown nodes
@@ -129,6 +153,16 @@ def get_integrated_graph(area, nodes, edges, processed_path, gtfs_path):
     """
     Retrieve or build an integrated multi-modal transportation network graph
     for a specified geographic area.
+
+    Args:
+        area: Area object representing the specified geographic area.
+        nodes (pandas.DataFrame): DataFrame containing node information.
+        edges (pandas.DataFrame): DataFrame containing edge information.
+        processed_path (str): Path to the processed data directory.
+        gtfs_path (str): Path to the GTFS (General Transit Feed Specification) data.
+
+    Returns:
+        pandas.DataFrame, pandas.DataFrame: Integrated network nodes and edges DataFrames.
     """
     print("Building integrated network")
     nodes["id"]=nodes.index

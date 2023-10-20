@@ -1,7 +1,18 @@
 import vroom
 import pandas as pd
-    
+
 def solve_vrp(network, vehicles, jobs):
+    """
+    Solve the Vehicle Routing Problem (VRP) for a given network, vehicles, and jobs.
+
+    Args:
+        network: Network object representing the transportation network.
+        vehicles (pandas.DataFrame): DataFrame containing vehicle information.
+        jobs (pandas.DataFrame): DataFrame containing job (delivery point) information.
+
+    Returns:
+        vroom.Solution: Solution object containing the optimized VRP solution.
+    """
     jobs["id"] = ["job_" + str(i) for i in range(1, len(jobs) + 1)]
     vehicles["id"] = ["vehicle_" + str(i) for i in range(1, len(vehicles) + 1)]
     pois = pd.concat([jobs, vehicles])

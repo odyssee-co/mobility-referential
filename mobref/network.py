@@ -11,6 +11,15 @@ import urbanaccess as ua
 class Network():
 
     def __init__(self, area, mode, processed_path, gtfs_path=None):
+        """
+        Initialize a transportation network for a specified area and mode.
+
+        Args:
+            area: Area object representing the specified geographic area.
+            mode (str): Mode of transportation (transit, drive, bike, or walk).
+            processed_path (str): Path to the processed data directory.
+            gtfs_path (str, optional): Path to the GTFS (General Transit Feed Specification) data. Required only for transit mode.
+        """
         if mode == "transit" and gtfs_path == None:
             raise Exception("No gtfs provided when mode is set to transit")
         self.processed_path = processed_path
@@ -21,6 +30,12 @@ class Network():
 
 
     def create_network(self):
+        """
+        Create and integrate a transportation network based on the specified mode (transit, drive, bike, or walk).
+
+        Returns:
+        None: Integrated network nodes and edges are stored in the corresponding attributes.
+        """
         path = f"{self.processed_path}/{self.mode}.pkl"
         if os.path.exists(path):
             print(f"Loading {self.mode} network...")
@@ -62,6 +77,15 @@ class Network():
         print() #cleaner stdout
 
     def convert_path_to_osmid(self, path):
+        """
+        Converts a list of node IDs to OSM IDs.
+
+        Args:
+        path (list): List of node IDs.
+
+        Returns:
+        list: List of corresponding OSM IDs.
+        """
         path_osmid = []
         for n in path:
             path_osmid.append(self.nodes.loc[n].id)
@@ -69,6 +93,19 @@ class Network():
 
 
     def shortest_path(self, r1, r2):
+        """
+        Finds the shortest path between two locations and returns route details.
+
+        Args:
+        r1 (dict): Dictionary with keys 'lon' and 'lat' representing the coordinates of the starting point.
+        r2 (dict): Dictionary with keys 'lon' and 'lat' representing the coordinates of the destination.
+
+        Returns:
+        dict: A dictionary containing the following keys:
+        - "shortest_path" (list): List of node IDs representing the shortest path.
+        - "travel_time" (float): Total travel time along the shortest path.
+        - "distance" (float): Total distance of the shortest path.
+        """
         req = pd.DataFrame([r1, r2], columns=["lon", "lat"])
         nodes_ids = self.pdn.get_node_ids(req.lon, req.lat).values
         shortest_path = self.pdn.shortest_path(nodes_ids[0], nodes_ids[1])
@@ -83,15 +120,15 @@ class Network():
 
     def get_route_details(self, route):
         """
-        Calculate travel time and distance for a given route on a graph.
+        Calculates travel time and distance for the given route.
 
-        Parameters:
-        - graph (NetworkX Graph): The graph representing the transportation network.
-        - route (list): A list of nodes representing the route to be analyzed.
+        Args:
+        route (list): List of node IDs representing the route.
 
         Returns:
-        - travel_time (float): The total travel time along the route (sum of travel times for individual edges).
-        - distance (float): The total distance covered along the route (sum of edge lengths).
+        dict: A dictionary containing the following keys:
+        - "travel_time" (float): Total travel time along the route.
+        - "distance" (float): Total distance of the route.
         """
         travel_time = 0
         distance = 0
@@ -106,6 +143,17 @@ class Network():
 
 
     def get_matrices(self, pois):
+        """
+        Computes matrices of travel times and distances between given Points of Interest (POIs).
+
+        Args:
+        pois (DataFrame): DataFrame containing POI locations with columns 'lon' and 'lat'.
+
+        Returns:
+        dict: A dictionary containing the following keys:
+        - "time" (DataFrame): Matrix of travel times between POIs.
+        - "distance" (DataFrame): Matrix of distances between POIs.
+        """
         pois_nodes = self.pdn.get_node_ids(pois.lon, pois.lat)
         origs = [o for o in pois_nodes.values for d in pois_nodes.values]
         dests = [d for o in pois_nodes.values for d in pois_nodes.values]
@@ -121,7 +169,18 @@ class Network():
         return {"time": m_t, "distance": m_d}
 
     def find_closest(self, pois, maxtime=600, maxitems=None):
-        #find the closest pois to each node
+        """
+        Finds the closest Points of Interest (POIs) to each location within a maximum travel time.
+
+        Args:
+        pois (DataFrame): DataFrame containing POI locations with columns 'lon' and 'lat'.
+        maxtime (int, optional): Maximum travel time in seconds. Defaults to 600.
+        maxitems (int, optional): Maximum number of closest POIs to return for each location. Defaults to None.
+
+        Returns:
+        dict: A dictionary containing closest POIs to each location. Keys are node IDs, and values are lists of
+        dictionaries containing 'poi_id', 'lon', 'lat', and 'travel_time' for each nearby POI.
+        """
         self.pdn.set_pois(category = 'pois',
                           maxdist = maxtime,
                           maxitems = maxitems,
@@ -135,6 +194,13 @@ class Network():
 
 
     def plot_accessibility(self, pois, time=300):
+        """
+        Plots accessibility of Points of Interest (POIs) within the given time limit from each location.
+
+        Args:
+        pois (DataFrame): DataFrame containing POI locations with columns 'lon' and 'lat'.
+        time (int, optional): Maximum travel time in seconds. Defaults to 300.
+        """
         #how many pois are within time seconds of each node?
         pois_nodes = self.pdn.get_node_ids(pois.lon, pois.lat)
         self.pdn.set(pois_nodes, name = 'pois')
@@ -149,6 +215,9 @@ class Network():
 
 
     def plot_net_by_travel_time(self):
+        """
+        Plots the network graph with edge colors based on travel time.
+        """
         edgecolor = ua.plot.col_colors(df=self.edges, col='weight', cmap='Blues', num_bins=5)
         ua.plot.plot_net(nodes=self.nodes,
                          edges=self.edges,
