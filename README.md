@@ -40,7 +40,7 @@ To install Mobref, follow these steps:
 
 2. Install Mobref using pip:
     ```bash
-    pip install .
+    cd mobility-referential && pip install .
     ```
 
 ### Download Necessary Data:
