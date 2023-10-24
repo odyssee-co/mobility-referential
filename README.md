@@ -3,6 +3,10 @@
 ## Introduction
 Mobref is a powerful framework designed to enhance mobility analysis and optimize territories by integrating various tools. Mobref streamlines complex mobility analyses by seamlessly integrating various data sources and employing advanced algorithms. With an unified interface and very fast processing, it provides a solid foundation for in-depth mobility studies, offering comprehensive solutions for route planning, accessibility analysis, and logistics optimization.
 
+<p align="center">
+<img src="https://github.com/odyssee-co/mobility-referential/blob/main/img/plaineco-net-tran.png" alt="Plaine commune multimodal network" width="500"/>
+</p>
+
 
 ## Key Features
 
