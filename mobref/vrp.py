@@ -13,8 +13,8 @@ def solve_vrp(network, vehicles, jobs):
     Returns:
         vroom.Solution: Solution object containing the optimized VRP solution.
     """
-    jobs["id"] = ["job_" + str(i) for i in range(1, len(jobs) + 1)]
-    vehicles["id"] = ["vehicle_" + str(i) for i in range(1, len(vehicles) + 1)]
+    jobs["id"] = ["job_" + str(i) for i in range(len(jobs))]
+    vehicles["id"] = ["vehicle_" + str(i) for i in range(len(vehicles))]
     pois = pd.concat([jobs, vehicles])
     pois.index = pd.RangeIndex(start=0, stop=len(pois), step=1)
     matrix = network.get_matrices(pois)["time"]
